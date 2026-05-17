@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 type Theatre = { theatreId: string; name: string; localPublicUrl: string };
@@ -54,6 +54,11 @@ export function BookingChooser({ theatre, shows }: { theatre: Theatre; shows: Sh
   const [heartbeatHealthy, setHeartbeatHealthy] = useState(true);
   const [canBookOnline, setCanBookOnline] = useState(true);
   const [loading, setLoading] = useState(false);
+  const pendingSignature = useRef<string | null>(null);
+  const pendingCount = useRef(0);
+  const selectedSeatsRef = useRef<string[]>([]);
+
+  useEffect(() => { selectedSeatsRef.current = selectedSeats; }, [selectedSeats]);
 
   const filteredShows = useMemo(() => shows.filter((s) => s.movieId === movieId), [shows, movieId]);
   const selectedShow = useMemo(() => filteredShows.find((s) => s.showId === showId) || filteredShows[0], [filteredShows, showId]);
@@ -68,12 +73,41 @@ export function BookingChooser({ theatre, shows }: { theatre: Theatre; shows: Sh
       const res = await fetch(`/api/live/show?showId=${selectedShow.showId}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.success) {
-        setSeatMap(data.seatMap || {});
-        setAuthority(data.authority);
-        setHeartbeatHealthy(!!data.heartbeatHealthy);
-        setCanBookOnline(!!data.canBookOnline);
-        if (data.message) setMessage(data.message);
-        else setMessage('');
+        setSeatMap((prev) => {
+          const nextMap = data.seatMap || {};
+          const merged = { ...nextMap } as SeatMap;
+          for (const seatId of selectedSeatsRef.current) {
+            if (nextMap[seatId]?.status === 'AVAILABLE') {
+              merged[seatId] = nextMap[seatId];
+            }
+          }
+          return merged;
+        });
+        const nextHealthy = !!data.heartbeatHealthy;
+        const nextAuthority = data.authority as 'LOCAL' | 'ONLINE' | 'BLOCKED';
+        const signature = `${nextHealthy}-${nextAuthority}-${!!data.canBookOnline}`;
+        const currentSignature = `${heartbeatHealthy}-${authority}-${canBookOnline}`;
+        if (signature === currentSignature) {
+          pendingSignature.current = null;
+          pendingCount.current = 0;
+          setHeartbeatHealthy(nextHealthy);
+          setAuthority(nextAuthority);
+          setCanBookOnline(!!data.canBookOnline);
+          if (data.message) setMessage(data.message); else setMessage('');
+        } else if (pendingSignature.current !== signature) {
+          pendingSignature.current = signature;
+          pendingCount.current = 1;
+        } else {
+          pendingCount.current += 1;
+          if (pendingCount.current >= 2) {
+            pendingSignature.current = null;
+            pendingCount.current = 0;
+            setHeartbeatHealthy(nextHealthy);
+            setAuthority(nextAuthority);
+            setCanBookOnline(!!data.canBookOnline);
+            if (data.message) setMessage(data.message); else setMessage('');
+          }
+        }
       }
     };
     load();

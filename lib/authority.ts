@@ -1,6 +1,6 @@
 import type { Authority, OutageMode, Theatre } from './store';
 
-const HEARTBEAT_TIMEOUT_SECONDS = Number(process.env.HEARTBEAT_TIMEOUT_SECONDS || 12);
+const HEARTBEAT_TIMEOUT_SECONDS = Number(process.env.HEARTBEAT_TIMEOUT_SECONDS || 20);
 
 function inWindow(now: Date, start: string, end: string) {
   const [sh, sm] = start.split(':').map(Number);

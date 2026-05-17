@@ -4,8 +4,8 @@ import { PolicyForm } from './policy-form';
 
 export const dynamic = 'force-dynamic';
 
-export default async function PoliciesPage() {
-  const theatre = (await readStore()).theatres[0];
+export default function PoliciesPage() {
+  const theatre = readStore().theatres[0];
   return (
     <PageShell
       title="Policy Configuration"

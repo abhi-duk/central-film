@@ -19,15 +19,24 @@ type Booking = {
 export default function TicketPage({ params }: { params: Promise<{ bookingId: string }> }) {
   const { bookingId } = use(params);
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [tries, setTries] = useState(0);
 
   useEffect(() => {
+    let stopped = false;
     const load = async () => {
       const res = await fetch('/api/bookings/central', { cache: 'no-store' });
       const data = await res.json();
       const found = (data.bookings || []).find((item: Booking) => item.bookingId === bookingId) || null;
+      if (stopped) return;
       setBooking(found);
+      if (!found) setTries((t) => t + 1);
     };
     load();
+    const t = setInterval(() => {
+      if (stopped) return;
+      load();
+    }, 1000);
+    return () => { stopped = true; clearInterval(t); };
   }, [bookingId]);
 
   const qrText = booking ? `${booking.bookingId}|${booking.movieTitle}|${booking.theatreName}|${booking.showTime || ''}|${booking.seats.join(',')}|${booking.requestIp || 'Unknown'}` : '';
@@ -63,7 +72,7 @@ export default function TicketPage({ params }: { params: Promise<{ bookingId: st
             <div className="small" style={{ color: '#475569' }}>Please show this printed ticket or QR code at the entrance.</div>
           </div>
         </div>
-      ) : <div className="card mt24"><div className="notice">Loading ticket...</div></div>}
+      ) : <div className="card mt24"><div className="notice">{tries > 8 ? 'Ticket is taking longer than expected to sync. Please refresh once.' : 'Fetching your ticket details…'}</div></div>}
     </PageShell>
   );
 }

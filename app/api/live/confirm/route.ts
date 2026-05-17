@@ -8,7 +8,7 @@ function clientIp(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const store = await readStore();
+  const store = readStore();
   const theatre = store.theatres[0];
   const showMeta: Record<string, { movieTitle: string; time: string }> = {
     'emp-1': { movieTitle: 'L2: Empuraan', time: '2026-05-17T18:30:00+05:30' },
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       requestIp: ip,
       sourceLabel: 'Booked online from the central fallback system',
     };
-    await addBooking(booking as any);
+    addBooking(booking as any);
     return NextResponse.json({ success: true, booking });
   }
 
@@ -67,7 +67,26 @@ export async function POST(req: NextRequest) {
     });
     const confirmData = await confirmRes.json();
     if (!confirmRes.ok || !confirmData.success) return NextResponse.json({ success: false, message: confirmData.message || 'Theatre confirmation failed.' }, { status: 409 });
-    return NextResponse.json({ success: true, booking: confirmData.booking });
+    const localBooking = confirmData.booking;
+    addBooking({
+      bookingId: localBooking.bookingId,
+      theatreId: localBooking.theatreId || theatre.theatreId,
+      showId: localBooking.showId,
+      movieTitle: localBooking.movieTitle,
+      theatreName: localBooking.theatreName || theatre.name,
+      seats: localBooking.seats || [],
+      totalTickets: localBooking.totalTickets || (localBooking.seats || []).length,
+      showTime: localBooking.showTime || selectedShow.time,
+      bookingMode: 'ONLINE',
+      source: 'AUDIT_COPY',
+      status: 'CONFIRMED',
+      createdAt: localBooking.createdAt || new Date().toISOString(),
+      syncedAt: new Date().toISOString(),
+      note: `Booked online through local theatre confirmation from ${ip}.`,
+      requestIp: localBooking.requestIp || ip,
+      sourceLabel: 'Booked online through the theatre server',
+    } as any);
+    return NextResponse.json({ success: true, booking: localBooking });
   } catch {
     return NextResponse.json({ success: false, message: 'Theatre server could not be reached. Please try again in a few moments.' }, { status: 502 });
   }

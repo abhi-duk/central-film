@@ -8,7 +8,7 @@ export async function GET(
 ) {
   const { theatreId } = await params;
   const showTime = req.nextUrl.searchParams.get('showTime') || undefined;
-  const store = await readStore();
+  const store = readStore();
   const theatre = store.theatres.find((t) => t.theatreId === theatreId);
   if (!theatre) return NextResponse.json({ success: false }, { status: 404 });
 
@@ -16,7 +16,7 @@ export async function GET(
   theatre.heartbeatStatus = healthy ? 'ONLINE' : 'OFFLINE';
   theatre.currentAuthority = determineAuthority(theatre, showTime);
   theatre.updatedAt = new Date().toISOString();
-  await writeStore(store);
+  writeStore(store);
 
   return NextResponse.json({
     success: true,
