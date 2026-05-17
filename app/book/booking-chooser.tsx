@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 type Theatre = { theatreId: string; name: string; localPublicUrl: string };
@@ -53,12 +53,8 @@ export function BookingChooser({ theatre, shows }: { theatre: Theatre; shows: Sh
   const [authority, setAuthority] = useState<'LOCAL' | 'ONLINE' | 'BLOCKED'>('LOCAL');
   const [heartbeatHealthy, setHeartbeatHealthy] = useState(true);
   const [canBookOnline, setCanBookOnline] = useState(true);
+  const [showOfflineState, setShowOfflineState] = useState(false);
   const [loading, setLoading] = useState(false);
-  const pendingSignature = useRef<string | null>(null);
-  const pendingCount = useRef(0);
-  const selectedSeatsRef = useRef<string[]>([]);
-
-  useEffect(() => { selectedSeatsRef.current = selectedSeats; }, [selectedSeats]);
 
   const filteredShows = useMemo(() => shows.filter((s) => s.movieId === movieId), [shows, movieId]);
   const selectedShow = useMemo(() => filteredShows.find((s) => s.showId === showId) || filteredShows[0], [filteredShows, showId]);
@@ -73,41 +69,13 @@ export function BookingChooser({ theatre, shows }: { theatre: Theatre; shows: Sh
       const res = await fetch(`/api/live/show?showId=${selectedShow.showId}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.success) {
-        setSeatMap((prev) => {
-          const nextMap = data.seatMap || {};
-          const merged = { ...nextMap } as SeatMap;
-          for (const seatId of selectedSeatsRef.current) {
-            if (nextMap[seatId]?.status === 'AVAILABLE') {
-              merged[seatId] = nextMap[seatId];
-            }
-          }
-          return merged;
-        });
-        const nextHealthy = !!data.heartbeatHealthy;
-        const nextAuthority = data.authority as 'LOCAL' | 'ONLINE' | 'BLOCKED';
-        const signature = `${nextHealthy}-${nextAuthority}-${!!data.canBookOnline}`;
-        const currentSignature = `${heartbeatHealthy}-${authority}-${canBookOnline}`;
-        if (signature === currentSignature) {
-          pendingSignature.current = null;
-          pendingCount.current = 0;
-          setHeartbeatHealthy(nextHealthy);
-          setAuthority(nextAuthority);
-          setCanBookOnline(!!data.canBookOnline);
-          if (data.message) setMessage(data.message); else setMessage('');
-        } else if (pendingSignature.current !== signature) {
-          pendingSignature.current = signature;
-          pendingCount.current = 1;
-        } else {
-          pendingCount.current += 1;
-          if (pendingCount.current >= 2) {
-            pendingSignature.current = null;
-            pendingCount.current = 0;
-            setHeartbeatHealthy(nextHealthy);
-            setAuthority(nextAuthority);
-            setCanBookOnline(!!data.canBookOnline);
-            if (data.message) setMessage(data.message); else setMessage('');
-          }
-        }
+        setSeatMap(data.seatMap || {});
+        setAuthority(data.authority);
+        setHeartbeatHealthy(!!data.heartbeatHealthy);
+        setCanBookOnline(!!data.canBookOnline);
+        if (data.message) setMessage(data.message);
+        else setMessage('');
+        setShowOfflineState(!data.heartbeatHealthy && data.authority !== 'ONLINE');
       }
     };
     load();
@@ -134,8 +102,9 @@ export function BookingChooser({ theatre, shows }: { theatre: Theatre; shows: Sh
     }
     if (!canBookOnline) {
       setMessage(!heartbeatHealthy && authority === 'LOCAL'
-        ? 'Internet connection is lost at the theatre. Only local counter booking is active now.'
+        ? 'Internet connection is lost at the theatre. This theatre is offline for online booking right now.'
         : 'Internet connection is lost and booking is paused for the moment.');
+      setShowOfflineState(true);
       return;
     }
     const staleSeat = selectedSeats.find((seatId) => seatMap[seatId]?.status !== 'AVAILABLE');
@@ -169,8 +138,23 @@ export function BookingChooser({ theatre, shows }: { theatre: Theatre; shows: Sh
     : !heartbeatHealthy && authority === 'ONLINE'
       ? 'The theatre internet is down. Central online booking is handling new bookings now.'
       : !heartbeatHealthy && authority === 'LOCAL'
-        ? 'The theatre internet is down. Only local counter booking is active right now.'
+        ? 'The theatre internet is down. This theatre is offline for online booking right now.'
         : 'The theatre internet is down and booking is paused for the moment.';
+
+  if (showOfflineState) {
+    return (
+      <div className="card">
+        <div className="kicker">Theatre status</div>
+        <h3 style={{ margin: '10px 0 8px 0', fontSize: 30 }}>This theatre is offline right now</h3>
+        <p className="subtitle">Internet connection at the theatre is lost, so online booking cannot continue for this theatre at the moment. Please go back and choose another theatre or wait until the connection returns.</p>
+        <div className="notice mt24">{message || 'Connection issue detected for this theatre.'}</div>
+        <div className="print-actions no-print" style={{ justifyContent: 'flex-start' }}>
+          <button type="button" className="button secondary" onClick={() => setShowOfflineState(false)}>View details again</button>
+          <button type="button" className="button cyan" onClick={() => router.push('/')}>Back to theatre selection</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-2">
@@ -219,6 +203,7 @@ export function BookingChooser({ theatre, shows }: { theatre: Theatre; shows: Sh
         </div>
 
         <div className="hall-wrap mt24">
+          <div className="hall-scroll">
           <div className="hall-legend">
             <div className="legend-chip"><span className="legend-dot" style={{ background: 'linear-gradient(135deg,#132033,#132033)' }} /> Free</div>
             <div className="legend-chip"><span className="legend-dot" style={{ background: 'linear-gradient(135deg,#67e8f9,#0ea5e9)' }} /> Your choice</div>
@@ -226,8 +211,9 @@ export function BookingChooser({ theatre, shows }: { theatre: Theatre; shows: Sh
             <div className="legend-chip"><span className="legend-dot" style={{ background: 'linear-gradient(135deg,#fca5a5,#ef4444)' }} /> Sold</div>
           </div>
           <div className="screen-arch">SCREEN</div>
-          <div>
+          <div className="hall-inner">
             {rows.map((row) => <HallRow key={row} row={row} seatMap={seatMap} selectedSeats={selectedSeats} onToggle={toggleSeat} disabled={!canBookOnline} />)}
+          </div>
           </div>
         </div>
 

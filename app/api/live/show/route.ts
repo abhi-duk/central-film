@@ -8,15 +8,22 @@ function templateSeatMap() {
   return out;
 }
 
+function nextShowIso(hour: number, minute: number) {
+  const now = new Date();
+  const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour - 5, minute - 30, 0));
+  if (utc.getTime() <= now.getTime()) utc.setUTCDate(utc.getUTCDate() + 1);
+  return utc.toISOString();
+}
+
 export async function GET(req: NextRequest) {
   const showId = req.nextUrl.searchParams.get('showId');
   if (!showId) return NextResponse.json({ success: false, message: 'showId is required' }, { status: 400 });
-  const store = readStore();
+  const store = await readStore();
   const theatre = store.theatres[0];
   const showTimes: Record<string, { time: string; movieTitle: string }> = {
-    'emp-1': { time: '2026-05-17T18:30:00+05:30', movieTitle: 'L2: Empuraan' },
-    'emp-2': { time: '2026-05-17T21:30:00+05:30', movieTitle: 'L2: Empuraan' },
-    'off-1': { time: '2026-05-17T19:00:00+05:30', movieTitle: 'Officer on Duty' },
+    'emp-1': { time: nextShowIso(18, 30), movieTitle: 'L2: Empuraan' },
+    'emp-2': { time: nextShowIso(21, 30), movieTitle: 'L2: Empuraan' },
+    'off-1': { time: nextShowIso(19, 0), movieTitle: 'Officer on Duty' },
   };
   const meta = showTimes[showId];
   const authority = determineAuthority(theatre, meta?.time);
@@ -25,31 +32,23 @@ export async function GET(req: NextRequest) {
 
   if (!healthy && authority === 'ONLINE') {
     const seatMap = templateSeatMap();
-    store.bookings.filter((b) => b.showId === showId).forEach((booking) => booking.seats.forEach((seat) => { if (seatMap[seat]) seatMap[seat].status = 'BOOKED'; }));
+    store.bookings.filter((b) => b.showId === showId && b.status === 'CONFIRMED').forEach((booking) => booking.seats.forEach((seat) => { if (seatMap[seat]) seatMap[seat].status = 'BOOKED'; }));
     return NextResponse.json({ success: true, authority, heartbeatHealthy: healthy, canBookOnline, seatMap, show: { showId, movieTitle: meta?.movieTitle, time: meta?.time, theatreName: theatre.name } });
   }
 
   if (!healthy && authority === 'LOCAL') {
     return NextResponse.json({
-      success: true,
-      authority,
-      heartbeatHealthy: healthy,
-      canBookOnline,
-      seatMap: templateSeatMap(),
-      show: { showId, movieTitle: meta?.movieTitle, time: meta?.time, theatreName: theatre.name },
-      message: 'Internet connection is lost at the theatre. Only local counter booking is active now.'
+      success: true, authority, heartbeatHealthy: healthy, canBookOnline,
+      seatMap: templateSeatMap(), show: { showId, movieTitle: meta?.movieTitle, time: meta?.time, theatreName: theatre.name },
+      message: 'Internet connection is lost at the theatre. This theatre is offline for online booking right now.',
     });
   }
 
   if (!healthy && authority === 'BLOCKED') {
     return NextResponse.json({
-      success: true,
-      authority,
-      heartbeatHealthy: healthy,
-      canBookOnline,
-      seatMap: templateSeatMap(),
-      show: { showId, movieTitle: meta?.movieTitle, time: meta?.time, theatreName: theatre.name },
-      message: 'Internet connection is lost and booking is paused for the moment.'
+      success: true, authority, heartbeatHealthy: healthy, canBookOnline,
+      seatMap: templateSeatMap(), show: { showId, movieTitle: meta?.movieTitle, time: meta?.time, theatreName: theatre.name },
+      message: 'Internet connection is lost and booking is paused for the moment.',
     });
   }
 

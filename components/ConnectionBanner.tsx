@@ -34,8 +34,6 @@ function announcementFor(status: Status) {
 export function ConnectionBanner({ theatreId }: { theatreId: string }) {
   const [status, setStatus] = useState<Status | null>(null);
   const previousSignature = useRef<string | null>(null);
-  const pendingSignature = useRef<string | null>(null);
-  const pendingCount = useRef(0);
 
   useEffect(() => {
     const load = async () => {
@@ -47,31 +45,16 @@ export function ConnectionBanner({ theatreId }: { theatreId: string }) {
           healthy: !!data.heartbeatHealthy,
           authority: data.authority,
         };
+        setStatus(next);
         const signature = `${next.healthy}-${next.authority}`;
         if (previousSignature.current === null) {
           previousSignature.current = signature;
-          setStatus(next);
           return;
         }
-        if (previousSignature.current === signature) {
-          pendingSignature.current = null;
-          pendingCount.current = 0;
-          setStatus(next);
-          return;
-        }
-        if (pendingSignature.current !== signature) {
-          pendingSignature.current = signature;
-          pendingCount.current = 1;
-          return;
-        }
-        pendingCount.current += 1;
-        if (pendingCount.current >= 2) {
-          previousSignature.current = signature;
-          pendingSignature.current = null;
-          pendingCount.current = 0;
-          setStatus(next);
+        if (previousSignature.current !== signature) {
           speak(announcementFor(next), 2);
         }
+        previousSignature.current = signature;
       } catch {}
     };
 

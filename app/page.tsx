@@ -24,8 +24,8 @@ const movies = [
   },
 ];
 
-export default function HomePage() {
-  const store = readStore();
+export default async function HomePage() {
+  const store = await readStore();
   const theatre = store.theatres[0];
   const authority = determineAuthority(theatre);
   const healthy = heartbeatHealthy(theatre);

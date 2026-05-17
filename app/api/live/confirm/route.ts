@@ -6,14 +6,21 @@ function clientIp(req: NextRequest) {
   return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'Unknown IP';
 }
 
+function nextShowIso(hour: number, minute: number) {
+  const now = new Date();
+  const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour - 5, minute - 30, 0));
+  if (utc.getTime() <= now.getTime()) utc.setUTCDate(utc.getUTCDate() + 1);
+  return utc.toISOString();
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const store = readStore();
+  const store = await readStore();
   const theatre = store.theatres[0];
   const showMeta: Record<string, { movieTitle: string; time: string }> = {
-    'emp-1': { movieTitle: 'L2: Empuraan', time: '2026-05-17T18:30:00+05:30' },
-    'emp-2': { movieTitle: 'L2: Empuraan', time: '2026-05-17T21:30:00+05:30' },
-    'off-1': { movieTitle: 'Officer on Duty', time: '2026-05-17T19:00:00+05:30' },
+    'emp-1': { movieTitle: 'L2: Empuraan', time: nextShowIso(18, 30) },
+    'emp-2': { movieTitle: 'L2: Empuraan', time: nextShowIso(21, 30) },
+    'off-1': { movieTitle: 'Officer on Duty', time: nextShowIso(19, 0) },
   };
   const selectedShow = showMeta[body.showId];
   if (!selectedShow) return NextResponse.json({ success: false, message: 'Unknown show' }, { status: 404 });
@@ -25,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   if (!canBookOnline) {
     const message = !healthy && authority === 'LOCAL'
-      ? 'Internet connection is lost at the theatre. Only local counter booking is active now.'
+      ? 'Internet connection is lost at the theatre. This theatre is offline for online booking right now.'
       : 'Internet connection is lost and booking is paused for the moment.';
     return NextResponse.json({ success: false, message }, { status: 409 });
   }
@@ -45,49 +52,30 @@ export async function POST(req: NextRequest) {
       status: 'CONFIRMED' as const,
       createdAt: new Date().toISOString(),
       syncedAt: new Date().toISOString(),
-      note: `Booked online from ${ip} while theatre internet was unavailable.`,
+      note: 'Created centrally in ONLINE_PRIORITY outage mode',
       requestIp: ip,
       sourceLabel: 'Booked online from the central fallback system',
     };
-    addBooking(booking as any);
+    await addBooking(booking as any);
     return NextResponse.json({ success: true, booking });
   }
 
   try {
-    const holdRes = await fetch(`${theatre.localPublicUrl}/api/booking/hold`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ showId: body.showId, seatIds: body.seatIds, source: 'ONLINE_VIA_LOCAL' }), cache: 'no-store'
+    const localHold = await fetch(`${theatre.localPublicUrl}/api/booking/hold`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+      body: JSON.stringify({ showId: body.showId, seatIds: body.seatIds, source: 'ONLINE_VIA_LOCAL' }),
     });
-    const holdData = await holdRes.json();
-    if (!holdRes.ok || !holdData.success) return NextResponse.json({ success: false, message: holdData.message || 'Seat hold failed at the theatre server.' }, { status: 409 });
-
-    const confirmRes = await fetch(`${theatre.localPublicUrl}/api/booking/confirm`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ holdSessionId: holdData.holdSessionId, source: 'ONLINE_VIA_LOCAL', customerIp: ip }), cache: 'no-store'
+    const holdData = await localHold.json();
+    if (!holdData.success) return NextResponse.json({ success: false, message: holdData.message || 'Seats could not be held.' }, { status: 409 });
+    const localConfirm = await fetch(`${theatre.localPublicUrl}/api/booking/confirm`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+      body: JSON.stringify({ holdSessionId: holdData.holdSessionId, source: 'ONLINE_VIA_LOCAL', customerIp: ip }),
     });
-    const confirmData = await confirmRes.json();
-    if (!confirmRes.ok || !confirmData.success) return NextResponse.json({ success: false, message: confirmData.message || 'Theatre confirmation failed.' }, { status: 409 });
-    const localBooking = confirmData.booking;
-    addBooking({
-      bookingId: localBooking.bookingId,
-      theatreId: localBooking.theatreId || theatre.theatreId,
-      showId: localBooking.showId,
-      movieTitle: localBooking.movieTitle,
-      theatreName: localBooking.theatreName || theatre.name,
-      seats: localBooking.seats || [],
-      totalTickets: localBooking.totalTickets || (localBooking.seats || []).length,
-      showTime: localBooking.showTime || selectedShow.time,
-      bookingMode: 'ONLINE',
-      source: 'AUDIT_COPY',
-      status: 'CONFIRMED',
-      createdAt: localBooking.createdAt || new Date().toISOString(),
-      syncedAt: new Date().toISOString(),
-      note: `Booked online through local theatre confirmation from ${ip}.`,
-      requestIp: localBooking.requestIp || ip,
-      sourceLabel: 'Booked online through the theatre server',
-    } as any);
-    return NextResponse.json({ success: true, booking: localBooking });
+    const confirmData = await localConfirm.json();
+    if (!confirmData.success) return NextResponse.json({ success: false, message: confirmData.message || 'Ticket confirmation failed.' }, { status: 409 });
+    if (confirmData.booking) await addBooking({ ...confirmData.booking, syncedAt: new Date().toISOString() });
+    return NextResponse.json({ success: true, booking: confirmData.booking });
   } catch {
-    return NextResponse.json({ success: false, message: 'Theatre server could not be reached. Please try again in a few moments.' }, { status: 502 });
+    return NextResponse.json({ success: false, message: 'The theatre server could not confirm your seat right now.' }, { status: 502 });
   }
 }

@@ -19,10 +19,10 @@ export async function POST(req: NextRequest) {
     requestIp: body.requestIp || null,
     sourceLabel: body.sourceLabel || 'Booked online from the central fallback system',
   };
-  addBooking(booking as any);
+  await addBooking(booking as any);
   return NextResponse.json({ success: true, booking });
 }
 
 export async function GET() {
-  return NextResponse.json({ success: true, bookings: readStore().bookings });
+  return NextResponse.json({ success: true, bookings: (await readStore()).bookings });
 }

@@ -3,8 +3,8 @@ import { readStore } from '../../lib/store';
 
 export const dynamic = 'force-dynamic';
 
-export default function ReportsPage() {
-  const store = readStore();
+export default async function ReportsPage() {
+  const store = await readStore();
   const byMovie: Record<string, { bookings: number; tickets: number }> = {};
   const byMode: Record<string, { bookings: number; tickets: number }> = {};
 

@@ -118,3 +118,10 @@ th { color: var(--muted); font-size: 12px; text-transform:uppercase; letter-spac
   .ticket-shell { max-width: 76mm; border:none; box-shadow:none; border-radius:0; }
   .print-only-hide { display:none !important; }
 }
+
+.role-ribbon{display:inline-flex;align-items:center;gap:8px;margin:10px 0 4px;padding:8px 12px;border-radius:999px;font-size:12px;font-weight:900;letter-spacing:.12em;border:1px solid var(--line);}
+.role-central{background:rgba(103,232,249,.12);color:#bff4ff;}
+.role-local{background:rgba(52,211,153,.12);color:#b8ffe4;}
+.hall-scroll{overflow-x:auto;padding-bottom:8px;}
+.hall-inner{min-width:620px;}
+@media (max-width: 640px){.hall-wrap{padding:16px;} .seat{min-width:46px;padding:11px 6px;} .hall-inner{min-width:560px;} .status-banner{align-items:flex-start;flex-direction:column;} .ticket-row{flex-direction:column;align-items:flex-start;} .ticket-value{text-align:left;max-width:100%;}}
