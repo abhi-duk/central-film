@@ -1,0 +1,26 @@
+{
+  "theatres": [
+    {
+      "theatreId": "KSFDC_SREE_TVM",
+      "name": "KSFDC Sree, TVM",
+      "city": "Thiruvananthapuram",
+      "localPublicUrl": "http://localhost:3000",
+      "workingHoursStart": "09:00",
+      "workingHoursEnd": "23:00",
+      "outageModeWorkingHours": "LOCAL_PRIORITY",
+      "outageModeOffHours": "ONLINE_PRIORITY",
+      "leadTimeCutoffMin": 120,
+      "heartbeatStatus": "OFFLINE",
+      "currentAuthority": "BLOCKED",
+      "lastHeartbeatAt": null,
+      "updatedAt": null,
+      "health": {
+        "appHealthy": false,
+        "dbHealthy": false,
+        "bookingApiHealthy": false
+      }
+    }
+  ],
+  "bookings": [],
+  "pending": []
+}
