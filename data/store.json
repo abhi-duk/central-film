@@ -12,8 +12,8 @@
       "leadTimeCutoffMin": 120,
       "heartbeatStatus": "OFFLINE",
       "currentAuthority": "BLOCKED",
-      "lastHeartbeatAt": "2026-05-17T20:09:13.315Z",
-      "updatedAt": "2026-05-17T20:35:25.966Z",
+      "lastHeartbeatAt": "2026-05-17T22:48:30.721Z",
+      "updatedAt": "2026-05-17T23:07:25.757Z",
       "health": {
         "appHealthy": true,
         "dbHealthy": true,
@@ -22,6 +22,46 @@
     }
   ],
   "bookings": [
+    {
+      "bookingId": "LOCAL-1779058064791",
+      "theatreId": "KSFDC_SREE_TVM",
+      "showId": "emp-1",
+      "movieTitle": "L2: Empuraan",
+      "theatreName": "KSFDC Sree, TVM",
+      "seats": [
+        "C4"
+      ],
+      "totalTickets": 1,
+      "showTime": "2026-05-17T18:30:00+05:30",
+      "bookingMode": "OFFLINE",
+      "source": "AUDIT_COPY",
+      "status": "CONFIRMED",
+      "createdAt": "2026-05-17T22:47:44.791Z",
+      "syncedAt": "2026-05-17T22:47:44.803Z",
+      "note": "Copied from the theatre seat engine",
+      "requestIp": "::1",
+      "sourceLabel": "Booked at the theatre counter"
+    },
+    {
+      "bookingId": "LOCAL-1779057724266",
+      "theatreId": "KSFDC_SREE_TVM",
+      "showId": "emp-1",
+      "movieTitle": "L2: Empuraan",
+      "theatreName": "KSFDC Sree, TVM",
+      "seats": [
+        "C3"
+      ],
+      "totalTickets": 1,
+      "showTime": "2026-05-17T18:30:00+05:30",
+      "bookingMode": "ONLINE",
+      "source": "AUDIT_COPY",
+      "status": "CONFIRMED",
+      "createdAt": "2026-05-17T22:42:04.266Z",
+      "syncedAt": "2026-05-17T22:42:04.350Z",
+      "note": "Booked online through local theatre confirmation from ::1.",
+      "requestIp": "::1",
+      "sourceLabel": "Booked online through the theatre server"
+    },
     {
       "bookingId": "LOCAL-1779048596353",
       "theatreId": "KSFDC_SREE_TVM",
