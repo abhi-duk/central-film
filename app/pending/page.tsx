@@ -4,8 +4,8 @@ import { PendingActions } from './pending-actions';
 
 export const dynamic = 'force-dynamic';
 
-export default function PendingPage() {
-  const pending = readStore().pending;
+export default async function PendingPage() {
+  const pending = (await readStore()).pending;
   return (
     <PageShell
       title="Pending Transactions"

@@ -21,6 +21,6 @@ export async function POST(req: NextRequest) {
     requestIp: body.requestIp || null,
     sourceLabel: body.sourceLabel || (body.bookingMode === 'ONLINE' ? 'Booked online through the theatre server' : 'Booked at the theatre counter'),
   };
-  addBooking(booking as any);
+  await addBooking(booking as any);
   return NextResponse.json({ success: true, booking });
 }

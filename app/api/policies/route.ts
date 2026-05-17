@@ -3,7 +3,7 @@ import { readStore, writeStore } from '../../../lib/store';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const store = readStore();
+  const store = await readStore();
   const theatre = store.theatres.find((t) => t.theatreId === body.theatreId);
   if (!theatre) return NextResponse.json({ success: false }, { status: 404 });
 
@@ -16,6 +16,6 @@ export async function POST(req: NextRequest) {
   theatre.leadTimeCutoffMin = Number(body.leadTimeCutoffMin) || 120;
   theatre.updatedAt = new Date().toISOString();
 
-  writeStore(store);
+  await writeStore(store);
   return NextResponse.json({ success: true, theatre });
 }

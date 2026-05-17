@@ -11,7 +11,7 @@ function templateSeatMap() {
 export async function GET(req: NextRequest) {
   const showId = req.nextUrl.searchParams.get('showId');
   if (!showId) return NextResponse.json({ success: false, message: 'showId is required' }, { status: 400 });
-  const store = readStore();
+  const store = await readStore();
   const theatre = store.theatres[0];
   const showTimes: Record<string, { time: string; movieTitle: string }> = {
     'emp-1': { time: '2026-05-17T18:30:00+05:30', movieTitle: 'L2: Empuraan' },
@@ -31,24 +31,16 @@ export async function GET(req: NextRequest) {
 
   if (!healthy && authority === 'LOCAL') {
     return NextResponse.json({
-      success: true,
-      authority,
-      heartbeatHealthy: healthy,
-      canBookOnline,
-      seatMap: templateSeatMap(),
-      show: { showId, movieTitle: meta?.movieTitle, time: meta?.time, theatreName: theatre.name },
+      success: true, authority, heartbeatHealthy: healthy, canBookOnline,
+      seatMap: templateSeatMap(), show: { showId, movieTitle: meta?.movieTitle, time: meta?.time, theatreName: theatre.name },
       message: 'Internet connection is lost at the theatre. Only local counter booking is active now.'
     });
   }
 
   if (!healthy && authority === 'BLOCKED') {
     return NextResponse.json({
-      success: true,
-      authority,
-      heartbeatHealthy: healthy,
-      canBookOnline,
-      seatMap: templateSeatMap(),
-      show: { showId, movieTitle: meta?.movieTitle, time: meta?.time, theatreName: theatre.name },
+      success: true, authority, heartbeatHealthy: healthy, canBookOnline,
+      seatMap: templateSeatMap(), show: { showId, movieTitle: meta?.movieTitle, time: meta?.time, theatreName: theatre.name },
       message: 'Internet connection is lost and booking is paused for the moment.'
     });
   }

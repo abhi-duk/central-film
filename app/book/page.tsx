@@ -10,8 +10,8 @@ const showCatalog = [
   { showId: 'off-1', movieId: 'officer', movieTitle: 'Officer on Duty', time: '2026-05-17T19:00:00+05:30' }
 ];
 
-export default function BookPage() {
-  const theatre = readStore().theatres[0];
+export default async function BookPage() {
+  const theatre = (await readStore()).theatres[0];
   return (
     <PageShell
       title="Book your seats here"

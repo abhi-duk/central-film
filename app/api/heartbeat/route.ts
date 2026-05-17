@@ -4,11 +4,9 @@ import { readStore, writeStore } from '../../../lib/store';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const store = readStore();
+  const store = await readStore();
   const theatre = store.theatres.find((t) => t.theatreId === body.theatreId);
-  if (!theatre) {
-    return NextResponse.json({ success: false, message: 'Unknown theatre' }, { status: 404 });
-  }
+  if (!theatre) return NextResponse.json({ success: false, message: 'Unknown theatre' }, { status: 404 });
 
   theatre.lastHeartbeatAt = body.sentAt || new Date().toISOString();
   theatre.updatedAt = new Date().toISOString();
@@ -20,12 +18,12 @@ export async function POST(req: NextRequest) {
   };
   theatre.currentAuthority = determineAuthority(theatre);
 
-  writeStore(store);
+  await writeStore(store);
   return NextResponse.json({ success: true, theatre });
 }
 
 export async function GET() {
-  const store = readStore();
+  const store = await readStore();
   const now = Date.now();
   let changed = false;
   for (const theatre of store.theatres) {
@@ -36,6 +34,6 @@ export async function GET() {
       changed = true;
     }
   }
-  if (changed) writeStore(store);
+  if (changed) await writeStore(store);
   return NextResponse.json({ success: true, theatres: store.theatres });
 }
