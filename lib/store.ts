@@ -107,7 +107,14 @@ export async function ensureCentralSchema() {
       heartbeat_status, current_authority, last_heartbeat_at, app_healthy, db_healthy, booking_api_healthy
     ) VALUES (?, 'KSFDC Sree, TVM', 'Thiruvananthapuram', ?, '09:00:00', '23:00:00',
       'LOCAL_PRIORITY', 'ONLINE_PRIORITY', 120, 'OFFLINE', 'BLOCKED', NULL, FALSE, FALSE, FALSE)
-    ON DUPLICATE KEY UPDATE name = VALUES(name), city = VALUES(city), working_hours_start = VALUES(working_hours_start), working_hours_end = VALUES(working_hours_end), outage_mode_working_hours = VALUES(outage_mode_working_hours), outage_mode_off_hours = VALUES(outage_mode_off_hours), lead_time_cutoff_min = VALUES(lead_time_cutoff_min)`,
+    ON DUPLICATE KEY UPDATE
+      name = VALUES(name),
+      city = VALUES(city),
+      working_hours_start = VALUES(working_hours_start),
+      working_hours_end = VALUES(working_hours_end),
+      outage_mode_working_hours = VALUES(outage_mode_working_hours),
+      outage_mode_off_hours = VALUES(outage_mode_off_hours),
+      lead_time_cutoff_min = VALUES(lead_time_cutoff_min)`,
     [theatreId, process.env.LOCAL_PUBLIC_URL || 'http://localhost:3000']
   );
 }
