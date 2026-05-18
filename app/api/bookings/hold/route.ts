@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     const healthy = heartbeatHealthy(theatre);
     const holdId = `HOLD-${crypto.randomUUID()}`;
     const sessionId = `SES-${crypto.randomUUID()}`;
-    const idempotencyKey = `HOLD-${crypto.randomUUID()}`;
+    const idempotencyKey = `HOLD-${body.theatreId}-${body.showId}-${body.seatIds.join('-')}`;
     const requestIp = req.headers.get('x-forwarded-for') || '127.0.0.1';
     const sourceLabel = 'Central online server';
 
