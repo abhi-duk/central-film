@@ -1,10 +1,6 @@
 import './globals.css';
-import type { Metadata } from 'next';
 
-export const metadata: Metadata = {
-  title: 'Central Booking Control',
-  description: 'Hybrid booking demo central control'
-};
+export const metadata = { title: 'Central Online Server' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -1,45 +1,54 @@
-import type { Authority, OutageMode, Theatre } from './store';
+export type Authority = 'LOCAL' | 'ONLINE' | 'BLOCKED';
 
-const HEARTBEAT_TIMEOUT_SECONDS = Number(process.env.HEARTBEAT_TIMEOUT_SECONDS || 12);
+export type Theatre = {
+  theatreId: string;
+  name: string;
+  city: string;
+  localPublicUrl: string;
+  workingHoursStart: string;
+  workingHoursEnd: string;
+  outageModeWorkingHours: 'LOCAL_PRIORITY' | 'ONLINE_PRIORITY' | 'BLOCK_ALL';
+  outageModeOffHours: 'LOCAL_PRIORITY' | 'ONLINE_PRIORITY' | 'BLOCK_ALL';
+  leadTimeCutoffMin: number;
+  heartbeatStatus: 'ONLINE' | 'OFFLINE' | 'RECOVERING';
+  currentAuthority: Authority;
+  lastHeartbeatAt: string | null;
+  updatedAt: string | null;
+  health: { appHealthy: boolean; dbHealthy: boolean; bookingApiHealthy: boolean };
+};
 
-function inWindow(now: Date, start: string, end: string) {
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const s = sh * 60 + sm;
-  const e = eh * 60 + em;
-  return mins >= s && mins <= e;
-}
-
-export function heartbeatHealthy(theatre: Theatre, thresholdSeconds = HEARTBEAT_TIMEOUT_SECONDS) {
+export function heartbeatHealthy(theatre: Theatre, thresholdSeconds = Number(process.env.HEARTBEAT_TIMEOUT_SECONDS || 30)) {
   if (!theatre.lastHeartbeatAt) return false;
   const diff = (Date.now() - new Date(theatre.lastHeartbeatAt).getTime()) / 1000;
-  return diff <= thresholdSeconds;
+  return diff >= 0 && diff <= thresholdSeconds;
 }
 
-export function determineAuthority(theatre: Theatre, showTimeIso?: string): Authority {
-  const healthy = heartbeatHealthy(theatre);
-  if (healthy) return 'LOCAL';
+function parseHm(v: string) {
+  const [h, m] = v.split(':').map(Number);
+  return h * 60 + m;
+}
 
-  const now = new Date();
-  const duringWorkingHours = inWindow(now, theatre.workingHoursStart, theatre.workingHoursEnd);
-  const mode: OutageMode = duringWorkingHours ? theatre.outageModeWorkingHours : theatre.outageModeOffHours;
+function isWorkingHours(theatre: Theatre, now = new Date()) {
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const start = parseHm(theatre.workingHoursStart);
+  const end = parseHm(theatre.workingHoursEnd);
+  return mins >= start && mins <= end;
+}
 
+export function determineAuthority(theatre: Theatre, showTimeIso?: string | null): Authority {
+  if (heartbeatHealthy(theatre)) return 'LOCAL';
+  const mode = isWorkingHours(theatre) ? theatre.outageModeWorkingHours : theatre.outageModeOffHours;
   if (mode === 'BLOCK_ALL') return 'BLOCKED';
   if (mode === 'LOCAL_PRIORITY') return 'LOCAL';
-  if (mode === 'ONLINE_PRIORITY') {
-    if (!showTimeIso) return 'ONLINE';
-    const diffMin = (new Date(showTimeIso).getTime() - Date.now()) / 60000;
-    return diffMin >= theatre.leadTimeCutoffMin ? 'ONLINE' : 'BLOCKED';
-  }
-  return 'BLOCKED';
+  if (!showTimeIso) return 'ONLINE';
+  const diffMin = (new Date(showTimeIso).getTime() - Date.now()) / 60000;
+  return diffMin >= theatre.leadTimeCutoffMin ? 'ONLINE' : 'BLOCKED';
 }
 
-export function onlineBookingAllowed(theatre: Theatre, showTimeIso?: string) {
+export function onlineBookingAllowed(theatre: Theatre, showTimeIso?: string | null) {
   const authority = determineAuthority(theatre, showTimeIso);
   const healthy = heartbeatHealthy(theatre);
-  if (authority === 'BLOCKED') return false;
-  if (healthy && authority === 'LOCAL') return true;
-  if (!healthy && authority === 'ONLINE') return true;
+  if (authority === 'ONLINE') return true;
+  if (authority === 'LOCAL' && healthy) return true;
   return false;
 }

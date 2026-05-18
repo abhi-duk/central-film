@@ -1,23 +1,21 @@
-import { PageShell } from '../../components/PageShell';
-import { readStore } from '../../lib/store';
-import { BookingChooser } from './booking-chooser';
-
-export const dynamic = 'force-dynamic';
-
-const showCatalog = [
-  { showId: 'emp-1', movieId: 'empuraan', movieTitle: 'L2: Empuraan', time: '2026-05-17T18:30:00+05:30' },
-  { showId: 'emp-2', movieId: 'empuraan', movieTitle: 'L2: Empuraan', time: '2026-05-17T21:30:00+05:30' },
-  { showId: 'off-1', movieId: 'officer', movieTitle: 'Officer on Duty', time: '2026-05-17T19:00:00+05:30' }
-];
+import ConnectionBanner from '../../components/ConnectionBanner';
+import BookingChooser from './booking-chooser';
+import { markTimedOutTheatres, readMysqlStore } from '../../lib/store';
 
 export default async function BookPage() {
-  const theatre = (await readStore()).theatres[0];
+  await markTimedOutTheatres(Number(process.env.HEARTBEAT_TIMEOUT_SECONDS || 30));
+  const store = await readMysqlStore();
+  const theatre = store.theatres[0];
+  const shows = [
+    { showId: 'SHOW_EMP_001', movieTitle: 'L2: Empuraan', theatreName: theatre.name, timeIso: new Date(Date.now() + 2 * 3600 * 1000).toISOString() },
+    { showId: 'SHOW_OD_001', movieTitle: 'Officer on Duty', theatreName: theatre.name, timeIso: new Date(Date.now() + 4 * 3600 * 1000).toISOString() },
+  ];
   return (
-    <PageShell
-      title="Book your seats here"
-      subtitle="Customers stay in the central booking flow. The system quietly checks the theatre node in the background and confirms seats without opening the local page."
-    >
-      <BookingChooser theatre={theatre} shows={showCatalog} />
-    </PageShell>
+    <main className="min-h-screen">
+      <ConnectionBanner theatreId={theatre.theatreId} />
+      <div className="mx-auto max-w-6xl px-6 py-8">
+        <BookingChooser theatreId={theatre.theatreId} initialShows={shows} />
+      </div>
+    </main>
   );
 }

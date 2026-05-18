@@ -1,233 +1,212 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 
-type Theatre = { theatreId: string; name: string; localPublicUrl: string };
-type ShowItem = { showId: string; movieId: string; movieTitle: string; time: string; theatreName?: string };
-type SeatMap = Record<string, { status: 'AVAILABLE' | 'HELD' | 'BOOKED' }>;
+type Show = { showId: string; movieTitle: string; theatreName: string; timeIso: string };
+type SeatMap = Record<string, { status: 'AVAILABLE' | 'HELD' | 'BOOKED'; holdExpiresAt?: string | null }>;
 
-const movieCards = {
-  empuraan: {
-    title: 'L2: Empuraan',
-    blurb: 'Grand action spectacle. Seats move quickly once evening booking opens.',
-    image: 'https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?auto=format&fit=crop&w=1200&q=80',
-  },
-  officer: {
-    title: 'Officer on Duty',
-    blurb: 'Sharper thriller mood with a cleaner late-show rush and smaller family groups.',
-    image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80',
-  },
-} as const;
-
-function HallRow({ row, seatMap, selectedSeats, onToggle, disabled }: { row: string; seatMap: SeatMap; selectedSeats: string[]; onToggle: (seatId: string) => void; disabled: boolean }) {
-  const rowSeats = Object.keys(seatMap).filter((seat) => seat.startsWith(row));
-  const left = rowSeats.slice(0, 4);
-  const right = rowSeats.slice(4);
-  const renderSeat = (seatId: string) => {
-    const state = seatMap[seatId]?.status;
-    const cls = selectedSeats.includes(seatId) ? 'seat selected' : state === 'BOOKED' ? 'seat booked' : state === 'HELD' ? 'seat held' : 'seat free';
-    return <button key={seatId} type="button" className={cls} onClick={() => onToggle(seatId)} disabled={disabled && !selectedSeats.includes(seatId)}>{seatId}</button>;
-  };
-  return (
-    <div className="row-wrap">
-      <div className="row-label">{row}</div>
-      <div className="row-seats">
-        <div className="seat-block">{left.map(renderSeat)}</div>
-        <div className="aisle-gap" />
-        <div className="seat-block">{right.map(renderSeat)}</div>
-      </div>
-    </div>
+function stableSeatMapSignature(map: SeatMap) {
+  return JSON.stringify(
+    Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([seat, value]) => [seat, value.status, value.holdExpiresAt || null])
   );
 }
 
-export function BookingChooser({ theatre, shows }: { theatre: Theatre; shows: ShowItem[] }) {
-  const router = useRouter();
-  const search = useSearchParams();
-  const initialMovie = search.get('movie') || shows[0]?.movieId || '';
-  const [movieId, setMovieId] = useState(initialMovie);
-  const [showId, setShowId] = useState(shows.find((s) => s.movieId === initialMovie)?.showId || shows[0]?.showId || '');
+export default function BookingChooser({ theatreId, initialShows }: { theatreId: string; initialShows: Show[] }) {
+  const [selectedShow, setSelectedShow] = useState<Show | null>(initialShows[0] ?? null);
   const [seatMap, setSeatMap] = useState<SeatMap>({});
-  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [authority, setAuthority] = useState<'LOCAL' | 'ONLINE' | 'BLOCKED'>('BLOCKED');
+  const [heartbeatHealthy, setHeartbeatHealthy] = useState(false);
+  const [canBookOnline, setCanBookOnline] = useState(false);
   const [message, setMessage] = useState('');
-  const [authority, setAuthority] = useState<'LOCAL' | 'ONLINE' | 'BLOCKED'>('LOCAL');
-  const [heartbeatHealthy, setHeartbeatHealthy] = useState(true);
-  const [canBookOnline, setCanBookOnline] = useState(true);
   const [showOfflineState, setShowOfflineState] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [holding, setHolding] = useState(false);
 
-  const filteredShows = useMemo(() => shows.filter((s) => s.movieId === movieId), [shows, movieId]);
-  const selectedShow = useMemo(() => filteredShows.find((s) => s.showId === showId) || filteredShows[0], [filteredShows, showId]);
+  const firstLoadRef = useRef(true);
+  const seatSigRef = useRef('');
 
   useEffect(() => {
-    if (!filteredShows.some((s) => s.showId === showId)) setShowId(filteredShows[0]?.showId || '');
-  }, [filteredShows, showId]);
+    let alive = true;
 
-  useEffect(() => {
+    firstLoadRef.current = true;
+    seatSigRef.current = '';
+    setSeatMap({});
+    setSelected([]);
+    setLoading(true);
+    setRefreshing(false);
+    setActionError('');
+
     const load = async () => {
       if (!selectedShow) return;
-      const res = await fetch(`/api/live/show?showId=${selectedShow.showId}`, { cache: 'no-store' });
-      const data = await res.json();
-      if (data.success) {
-        setSeatMap(data.seatMap || {});
+      try {
+        if (firstLoadRef.current) setLoading(true);
+        else setRefreshing(true);
+
+        const res = await fetch(`/api/live/show?showId=${selectedShow.showId}`, { cache: 'no-store' });
+        const text = await res.text();
+        let data: any = null;
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch {
+          data = null;
+        }
+
+        if (!alive) return;
+
+        if (!res.ok || !data || !data.success) {
+          setMessage('The theatre server could not be checked right now. Please try again.');
+          setCanBookOnline(false);
+          setShowOfflineState(true);
+          setLoading(false);
+          setRefreshing(false);
+          firstLoadRef.current = false;
+          return;
+        }
+
+        const nextSeatMap: SeatMap = data.seatMap ?? {};
+        const nextSig = stableSeatMapSignature(nextSeatMap);
+
+        if (seatSigRef.current !== nextSig) {
+          seatSigRef.current = nextSig;
+          setSeatMap(nextSeatMap);
+          setSelected(prev => prev.filter(seat => nextSeatMap[seat]?.status === 'AVAILABLE'));
+        }
+
         setAuthority(data.authority);
         setHeartbeatHealthy(!!data.heartbeatHealthy);
         setCanBookOnline(!!data.canBookOnline);
-        if (data.message) setMessage(data.message);
-        else setMessage('');
-        setShowOfflineState(!data.heartbeatHealthy && data.authority !== 'ONLINE');
+        setMessage(data.message || '');
+        setShowOfflineState(!data.canBookOnline);
+        setLoading(false);
+        setRefreshing(false);
+        firstLoadRef.current = false;
+      } catch {
+        if (!alive) return;
+        setMessage('The theatre connection could not be checked right now.');
+        setCanBookOnline(false);
+        setShowOfflineState(true);
+        setLoading(false);
+        setRefreshing(false);
+        firstLoadRef.current = false;
       }
     };
+
     load();
-    const t = setInterval(load, 2000);
-    return () => clearInterval(t);
+    const timer = setInterval(load, 5000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
   }, [selectedShow?.showId]);
 
-  const toggleSeat = (seatId: string) => {
-    if (!canBookOnline) return;
-    if (selectedSeats.includes(seatId)) {
-      setSelectedSeats((prev) => prev.filter((s) => s !== seatId));
-      return;
-    }
-    const state = seatMap[seatId]?.status;
-    if (state && state !== 'AVAILABLE') return;
-    setSelectedSeats((prev) => [...prev, seatId]);
+  const rows = useMemo(() => Array.from(new Set(Object.keys(seatMap || {}).map(seat => seat[0]))), [seatMap]);
+
+  const toggleSeat = (seat: string) => {
+    const st = seatMap[seat]?.status;
+    if (st === 'BOOKED' || st === 'HELD' || holding) return;
+    setSelected(prev => prev.includes(seat) ? prev.filter(x => x !== seat) : [...prev, seat]);
   };
 
-  const proceed = async () => {
-    if (!selectedShow) return;
-    if (!selectedSeats.length) {
-      setMessage('Please choose one or more seats first.');
-      return;
-    }
-    if (!canBookOnline) {
-      setMessage(!heartbeatHealthy && authority === 'LOCAL'
-        ? 'Internet connection is lost at the theatre. This theatre is offline for online booking right now.'
-        : 'Internet connection is lost and booking is paused for the moment.');
-      setShowOfflineState(true);
-      return;
-    }
-    const staleSeat = selectedSeats.find((seatId) => seatMap[seatId]?.status !== 'AVAILABLE');
-    if (staleSeat) {
-      setMessage(`${staleSeat} is no longer free. Please remove it and continue.`);
-      return;
-    }
-    setLoading(true);
-    setMessage('');
+  const startHold = async () => {
+    if (!selectedShow || selected.length === 0 || holding) return;
+    setHolding(true);
+    setActionError('');
     try {
-      const res = await fetch('/api/live/confirm', {
+      const res = await fetch('/api/bookings/hold', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ showId: selectedShow.showId, seatIds: selectedSeats, customerIp: '' }),
+        body: JSON.stringify({ theatreId, showId: selectedShow.showId, movieTitle: selectedShow.movieTitle, theatreName: selectedShow.theatreName, showTimeIso: selectedShow.timeIso, seatIds: selected })
       });
-      const data = await res.json();
-      if (!data.success) {
-        setMessage(data.message || 'Booking could not be completed.');
-        return;
-      }
-      setSelectedSeats([]);
-      router.push(`/ticket/${data.booking.bookingId}`);
+      const text = await res.text();
+      let data: any = null;
+      try { data = text ? JSON.parse(text) : null; } catch {}
+      if (data?.success) window.location.href = `/book/pay?holdId=${encodeURIComponent(data.holdId)}`;
+      else setActionError(data?.message || 'Could not hold seats');
+    } catch {
+      setActionError('Could not hold seats right now. Please try again.');
     } finally {
-      setLoading(false);
+      setHolding(false);
     }
   };
 
-  const rows = Array.from(new Set(Object.keys(seatMap).map((seat) => seat[0])));
-  const laymanMessage = heartbeatHealthy && authority === 'LOCAL'
-    ? 'The theatre server is connected. Your seats will be checked there quietly in the background before the ticket is issued.'
-    : !heartbeatHealthy && authority === 'ONLINE'
-      ? 'The theatre internet is down. Central online booking is handling new bookings now.'
-      : !heartbeatHealthy && authority === 'LOCAL'
-        ? 'The theatre internet is down. This theatre is offline for online booking right now.'
-        : 'The theatre internet is down and booking is paused for the moment.';
-
-  if (showOfflineState) {
-    return (
-      <div className="card">
-        <div className="kicker">Theatre status</div>
-        <h3 style={{ margin: '10px 0 8px 0', fontSize: 30 }}>This theatre is offline right now</h3>
-        <p className="subtitle">Internet connection at the theatre is lost, so online booking cannot continue for this theatre at the moment. Please go back and choose another theatre or wait until the connection returns.</p>
-        <div className="notice mt24">{message || 'Connection issue detected for this theatre.'}</div>
-        <div className="print-actions no-print" style={{ justifyContent: 'flex-start' }}>
-          <button type="button" className="button secondary" onClick={() => setShowOfflineState(false)}>View details again</button>
-          <button type="button" className="button cyan" onClick={() => router.push('/')}>Back to theatre selection</button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="grid grid-2">
-      <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-        <div style={{ position: 'relative', minHeight: 320 }}>
-          <img className="poster-image" src={movieCards[movieId as keyof typeof movieCards]?.image || movieCards.empuraan.image} alt={movieCards[movieId as keyof typeof movieCards]?.title || 'Movie'} />
-          <div className="poster-content">
-            <div className="movie-chip">{theatre.name}</div>
-            <h3 className="poster-title">{movieCards[movieId as keyof typeof movieCards]?.title || 'Choose a movie'}</h3>
-            <p className="poster-copy">{movieCards[movieId as keyof typeof movieCards]?.blurb || 'Select a movie and show time to continue.'}</p>
-          </div>
-        </div>
-        <div style={{ padding: 22 }}>
-          <div className="label">Choose movie</div>
-          <div className="poster-row">
-            {Object.entries(movieCards).map(([id, meta]) => (
-              <button key={id} type="button" className="card alt" style={{ textAlign: 'left', padding: 16, borderColor: id === movieId ? 'rgba(103,232,249,.5)' : undefined }} onClick={() => setMovieId(id)}>
-                <div className="movie-chip">{id === movieId ? 'Selected now' : 'Tap to choose'}</div>
-                <h3 style={{ margin: '14px 0 0 0', fontSize: 24 }}>{meta.title}</h3>
-                <p className="subtitle" style={{ marginTop: 10 }}>{meta.blurb}</p>
-              </button>
-            ))}
-          </div>
-          <div className="mt24">
-            <label className="label">Choose show time</label>
-            <select className="select" value={selectedShow?.showId || ''} onChange={(e) => setShowId(e.target.value)}>
-              {filteredShows.map((show) => (
-                <option key={show.showId} value={show.showId}>{show.movieTitle} — {new Date(show.time).toLocaleString()}</option>
-              ))}
-            </select>
-          </div>
-          <div className="notice mt24">{laymanMessage}</div>
+    <div className="space-y-6">
+      <div className="card p-6">
+        <div className="text-sm uppercase tracking-[0.3em] text-cyan-300">CENTRAL ONLINE SERVER</div>
+        <h1 className="mt-2 text-3xl font-bold">Choose a show and book online</h1>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          {initialShows.map(show => (
+            <button key={show.showId} type="button" onClick={() => setSelectedShow(show)}
+              className={`card p-4 text-left transition ${selectedShow?.showId === show.showId ? 'ring-2 ring-cyan-400' : ''}`}>
+              <div className="text-xl font-semibold">{show.movieTitle}</div>
+              <div className="mt-1 text-slate-300">{show.theatreName}</div>
+              <div className="mt-1 text-slate-400">{new Date(show.timeIso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</div>
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="card">
-        <div className="flex-between" style={{ flexWrap: 'wrap' }}>
+      <div className="card p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="kicker">Seat selection</div>
-            <h3 style={{ margin: '10px 0 4px 0', fontSize: 30 }}>{selectedShow?.movieTitle}</h3>
-            <div className="small">{theatre.name} • {selectedShow ? new Date(selectedShow.time).toLocaleString() : ''}</div>
+            <div className="text-2xl font-bold">{selectedShow?.movieTitle}</div>
+            <div className="text-slate-300">{selectedShow?.theatreName} • {selectedShow ? new Date(selectedShow.timeIso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : ''}</div>
           </div>
-          <div className={`badge ${heartbeatHealthy && authority === 'LOCAL' ? 'online' : authority === 'ONLINE' ? 'online-mode' : 'offline'}`}>
-            {heartbeatHealthy && authority === 'LOCAL' ? 'Theatre confirms in background' : authority === 'ONLINE' ? 'Central fallback active' : authority === 'LOCAL' ? 'Only local counter active' : 'Booking paused'}
+          <div className="rounded-full bg-slate-800 px-3 py-2 text-sm transition-opacity duration-300">
+            {heartbeatHealthy ? 'Healthy via theatre' : authority === 'ONLINE' ? 'Central fallback mode' : 'Offline / blocked'}
           </div>
         </div>
+        {message ? <div className="mt-4 rounded-xl bg-slate-800/70 px-4 py-3 text-slate-200 transition-opacity duration-300">{message}</div> : null}
 
-        <div className="hall-wrap mt24">
-          <div className="hall-scroll">
-          <div className="hall-legend">
-            <div className="legend-chip"><span className="legend-dot" style={{ background: 'linear-gradient(135deg,#132033,#132033)' }} /> Free</div>
-            <div className="legend-chip"><span className="legend-dot" style={{ background: 'linear-gradient(135deg,#67e8f9,#0ea5e9)' }} /> Your choice</div>
-            <div className="legend-chip"><span className="legend-dot" style={{ background: 'linear-gradient(135deg,#fde68a,#f59e0b)' }} /> Being held</div>
-            <div className="legend-chip"><span className="legend-dot" style={{ background: 'linear-gradient(135deg,#fca5a5,#ef4444)' }} /> Sold</div>
+        {showOfflineState ? (
+          <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-6 transition-all duration-300">
+            <div className="text-xl font-bold">This theatre is offline right now</div>
+            <div className="mt-2 text-red-100/90">Please go back and try again later or choose another theatre once the connection is stable.</div>
+            <Link href="/" className="btn btn-secondary mt-5 inline-block">Back to theatre selection</Link>
           </div>
-          <div className="screen-arch">SCREEN</div>
-          <div className="hall-inner">
-            {rows.map((row) => <HallRow key={row} row={row} seatMap={seatMap} selectedSeats={selectedSeats} onToggle={toggleSeat} disabled={!canBookOnline} />)}
-          </div>
-          </div>
-        </div>
-
-        <div className="summary-bar">
-          <div>
-            <div className="small">Selected seats</div>
-            <div className="ticket-seats">{selectedSeats.length ? selectedSeats.join(', ') : 'Nothing selected yet'}</div>
-          </div>
-          <div className="flex" style={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <button type="button" className="button secondary" onClick={() => setSelectedSeats([])} disabled={!selectedSeats.length}>Clear seats</button>
-            <button type="button" className="button cyan" onClick={proceed} disabled={loading || !selectedSeats.length || !canBookOnline}>{loading ? 'Confirming…' : 'Confirm booking'}</button>
-          </div>
-        </div>
-        {message && <div className="notice mt24">{message}</div>}
+        ) : loading ? (
+          <div className="mt-6 text-slate-300">Loading seat layout...</div>
+        ) : (
+          <>
+            <div className="mx-auto mt-6 mb-5 max-w-3xl rounded-full bg-slate-700 py-3 text-center text-sm tracking-[0.3em] text-slate-200">SCREEN</div>
+            <div className="mb-3 min-h-[20px] text-xs text-slate-400">{refreshing ? 'Refreshing live seat status…' : '\u00A0'}</div>
+            <div className="seat-grid-wrap">
+              <div className="seat-grid">
+                {rows.map(row => (
+                  <React.Fragment key={row}>
+                    <div className="flex items-center justify-center text-slate-400 font-bold">{row}</div>
+                    {Array.from({ length: 8 }).map((_, i) => {
+                      const seat = `${row}${i + 1}`;
+                      const status = seatMap[seat]?.status || 'AVAILABLE';
+                      const cls = selected.includes(seat) ? 'seat seat-selected' : status === 'BOOKED' ? 'seat seat-booked' : status === 'HELD' ? 'seat seat-held' : 'seat seat-available';
+                      return <button key={seat} type="button" className={cls} onClick={() => toggleSeat(seat)}>{i + 1}</button>;
+                    })}
+                    <div />
+                    {Array.from({ length: 8 }).map((_, i) => {
+                      const seat = `${row}${i + 9}`;
+                      const status = seatMap[seat]?.status || 'AVAILABLE';
+                      const cls = selected.includes(seat) ? 'seat seat-selected' : status === 'BOOKED' ? 'seat seat-booked' : status === 'HELD' ? 'seat seat-held' : 'seat seat-available';
+                      return <button key={seat} type="button" className={cls} onClick={() => toggleSeat(seat)}>{i + 9}</button>;
+                    })}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+            <div className="mt-3 min-h-[24px] text-sm text-red-300">{actionError || '\u00A0'}</div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-slate-950 p-4">
+              <div><div className="text-slate-400 text-sm">Selected seats</div><div className="mt-1 font-semibold">{selected.length ? selected.join(', ') : 'None selected'}</div></div>
+              <button type="button" className={`btn ${selected.length && !holding ? 'btn-primary' : 'btn-secondary opacity-60 cursor-not-allowed'}`} disabled={!selected.length || holding} onClick={startHold}>
+                {holding ? 'Holding seats…' : 'Hold seats and continue to payment'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

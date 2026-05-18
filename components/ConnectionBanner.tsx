@@ -2,87 +2,64 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-type Status = {
-  healthy: boolean;
-  authority: 'LOCAL' | 'ONLINE' | 'BLOCKED';
-};
+type Status = { healthy: boolean; authority: 'LOCAL' | 'ONLINE' | 'BLOCKED' };
 
-function speak(text: string, times = 2) {
+function speak(text: string) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
-  for (let i = 0; i < times; i++) {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    window.speechSynthesis.speak(utterance);
-  }
+  const utterance = new SpeechSynthesisUtterance(text);
+  window.speechSynthesis.speak(utterance);
 }
 
-function announcementFor(status: Status) {
-  if (status.healthy) {
-    return 'Internet connection is back. Online booking is active. Theatre live booking is active.';
-  }
-  if (status.authority === 'ONLINE') {
-    return 'Internet connection is lost. Central online booking is active. Local counter booking should pause.';
-  }
-  if (status.authority === 'LOCAL') {
-    return 'Internet connection is lost. Online booking is paused. Local counter booking is active.';
-  }
-  return 'Internet connection is lost. Booking is paused.';
+function message(s: Status) {
+  if (s.healthy) return 'Internet connection is healthy. Online booking is active and the theatre server is confirming seats in the background.';
+  if (s.authority === 'ONLINE') return 'Internet connection is lost at the theatre. Central online booking is active now. Local counters should wait until the connection comes back.';
+  if (s.authority === 'LOCAL') return 'Internet connection is lost at the theatre. Online booking is paused now. Only local counter booking is active.';
+  return 'Internet connection is lost. Booking is paused until the connection comes back.';
 }
 
-export function ConnectionBanner({ theatreId }: { theatreId: string }) {
+export default function ConnectionBanner({ theatreId }: { theatreId: string }) {
   const [status, setStatus] = useState<Status | null>(null);
-  const previousSignature = useRef<string | null>(null);
+  const candidateSignature = useRef<string | null>(null);
+  const candidateCount = useRef(0);
 
   useEffect(() => {
-    const load = async () => {
+    let active = true;
+    const run = async () => {
       try {
         const res = await fetch(`/api/theatres/${theatreId}/authority`, { cache: 'no-store' });
-        const data = await res.json();
-        if (!data?.success) return;
-        const next: Status = {
-          healthy: !!data.heartbeatHealthy,
-          authority: data.authority,
-        };
-        setStatus(next);
+        const text = await res.text();
+        let data: any = null;
+        try { data = text ? JSON.parse(text) : null; } catch {}
+        if (!active || !data?.success) return;
+        const next: Status = { healthy: !!data.heartbeatHealthy, authority: data.authority };
         const signature = `${next.healthy}-${next.authority}`;
-        if (previousSignature.current === null) {
-          previousSignature.current = signature;
-          return;
-        }
-        if (previousSignature.current !== signature) {
-          speak(announcementFor(next), 2);
-        }
-        previousSignature.current = signature;
+        if (candidateSignature.current === signature) candidateCount.current += 1;
+        else { candidateSignature.current = signature; candidateCount.current = 1; }
+        if (candidateCount.current < 3) return;
+        setStatus(prev => {
+          const prevSignature = prev ? `${prev.healthy}-${prev.authority}` : null;
+          if (prevSignature && prevSignature !== signature) speak(message(next));
+          return next;
+        });
       } catch {}
     };
-
-    load();
-    const t = setInterval(load, 2000);
-    return () => clearInterval(t);
+    run();
+    const timer = setInterval(run, 5000);
+    return () => { active = false; clearInterval(timer); };
   }, [theatreId]);
 
   if (!status) return null;
-
-  const isLost = !status.healthy;
-  const tone = isLost ? 'banner-red' : 'banner-green';
-  const title = isLost ? 'Internet connection is lost at the theatre' : 'Internet connection is healthy';
-  const subtitle = isLost
-    ? status.authority === 'ONLINE'
-      ? 'Central online booking is active now. Local counters should wait until the connection comes back.'
-      : status.authority === 'LOCAL'
-      ? 'Online booking is paused now. Only local counter booking is active.'
-      : 'Both online and local booking are paused until the connection comes back.'
-    : 'Online booking is active and the theatre server is confirming seats in the background.';
-
+  const cls = status.healthy ? 'banner banner-ok' : status.authority === 'BLOCKED' ? 'banner banner-bad' : 'banner banner-warn';
   return (
-    <div className={`status-banner ${tone}`}>
+    <div className={cls}>
       <div>
-        <div className="status-title">{title}</div>
-        <div className="status-subtitle">{subtitle}</div>
+        <div className="font-bold">CENTRAL ONLINE SERVER</div>
+        <div className="text-sm opacity-90">{message(status)}</div>
       </div>
-      <div className="status-pill">{status.healthy ? 'Online booking active' : status.authority === 'LOCAL' ? 'Local counter active' : status.authority === 'ONLINE' ? 'Central online active' : 'Booking paused'}</div>
+      <div className="rounded-full bg-black/20 px-3 py-1 text-xs font-semibold">
+        {status.healthy ? 'Live via theatre' : status.authority === 'ONLINE' ? 'Central fallback active' : status.authority === 'LOCAL' ? 'Local counter only' : 'Booking paused'}
+      </div>
     </div>
   );
 }

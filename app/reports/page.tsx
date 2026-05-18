@@ -1,80 +1,40 @@
-import { PageShell } from '../../components/PageShell';
-import { readStore } from '../../lib/store';
-
-export const dynamic = 'force-dynamic';
+import Link from 'next/link';
+import { readMysqlStore } from '../../lib/store';
 
 export default async function ReportsPage() {
-  const store = await readStore();
-  const byMovie: Record<string, { bookings: number; tickets: number }> = {};
-  const byMode: Record<string, { bookings: number; tickets: number }> = {};
-
-  for (const booking of store.bookings as any[]) {
-    byMovie[booking.movieTitle] ||= { bookings: 0, tickets: 0 };
-    byMovie[booking.movieTitle].bookings += 1;
-    byMovie[booking.movieTitle].tickets += booking.totalTickets;
-
-    const key = booking.sourceLabel || booking.source;
-    byMode[key] ||= { bookings: 0, tickets: 0 };
-    byMode[key].bookings += 1;
-    byMode[key].tickets += booking.totalTickets;
-  }
-
+  const store = await readMysqlStore();
   return (
-    <PageShell
-      title="Central reports and audit copy"
-      subtitle="These records are copied from the theatre seat engine or created in central fallback mode. They are here for monitoring, customer support, and audit visibility."
-    >
-      <div className="grid grid-2">
-        <div className="card">
-          <div className="kicker">By movie</div>
-          <div className="tableWrap mt24">
-            <table>
-              <thead><tr><th>Movie</th><th>Bookings</th><th>Tickets</th></tr></thead>
-              <tbody>
-                {Object.entries(byMovie).length === 0 ? <tr><td colSpan={3}>No records yet</td></tr> :
-                  Object.entries(byMovie).map(([movie, data]) => <tr key={movie}><td>{movie}</td><td>{data.bookings}</td><td>{data.tickets}</td></tr>)
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div className="card">
-          <div className="kicker">By booking type</div>
-          <div className="tableWrap mt24">
-            <table>
-              <thead><tr><th>Booking type</th><th>Bookings</th><th>Tickets</th></tr></thead>
-              <tbody>
-                {Object.entries(byMode).length === 0 ? <tr><td colSpan={3}>No records yet</td></tr> :
-                  Object.entries(byMode).map(([mode, data]) => <tr key={mode}><td>{mode}</td><td>{data.bookings}</td><td>{data.tickets}</td></tr>)
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      <div className="card mt24">
-        <div className="kicker">Raw booking records</div>
-        <div className="tableWrap mt24">
-          <table>
-            <thead><tr><th>Booking ID</th><th>Movie</th><th>Seats</th><th>How it was booked</th><th>Machine IP</th><th>Status</th><th>Created</th></tr></thead>
+    <main className="min-h-screen px-6 py-8">
+      <div className="mx-auto max-w-6xl">
+        <Link href="/" className="text-cyan-300">← Back</Link>
+        <h1 className="mt-4 text-3xl font-bold">Central Reports</h1>
+        <div className="mt-6 card overflow-hidden">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-800 text-slate-300">
+              <tr>
+                <th className="px-4 py-3 text-left">Booking ID</th>
+                <th className="px-4 py-3 text-left">Movie</th>
+                <th className="px-4 py-3 text-left">Seats</th>
+                <th className="px-4 py-3 text-left">Source</th>
+                <th className="px-4 py-3 text-left">Status</th>
+              </tr>
+            </thead>
             <tbody>
-              {store.bookings.length === 0 ? <tr><td colSpan={7}>No records yet</td></tr> :
-                (store.bookings as any[]).map((b) => (
-                  <tr key={b.bookingId}>
-                    <td>{b.bookingId}</td>
-                    <td>{b.movieTitle}</td>
-                    <td>{b.seats.join(', ')}</td>
-                    <td>{b.sourceLabel || b.source}</td>
-                    <td>{b.requestIp || 'Unknown IP'}</td>
-                    <td>{b.status}</td>
-                    <td>{new Date(b.createdAt).toLocaleString()}</td>
-                  </tr>
-                ))
-              }
+              {store.bookings.length === 0 ? (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No bookings yet</td></tr>
+              ) : store.bookings.map(b => (
+                <tr key={b.bookingId} className="border-t border-slate-800">
+                  <td className="px-4 py-3">{b.bookingId}</td>
+                  <td className="px-4 py-3">{b.movieTitle}</td>
+                  <td className="px-4 py-3">{b.seats.join(', ')}</td>
+                  <td className="px-4 py-3">{b.bookingSource}</td>
+                  <td className="px-4 py-3">{b.bookingStatus}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </div>
-    </PageShell>
+    </main>
   );
 }

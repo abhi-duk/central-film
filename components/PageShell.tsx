@@ -1,21 +1,25 @@
+'use client';
+import Link from 'next/link';
 import { ReactNode } from 'react';
-import { Nav } from './Nav';
-import { ConnectionBanner } from './ConnectionBanner';
 
-export function PageShell({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode; }) {
+export default function PageShell({ children, serverLabel = 'CENTRAL ONLINE SERVER' }: { children: ReactNode; serverLabel?: string }) {
   return (
-    <main className="container">
-      <ConnectionBanner theatreId="KSFDC_SREE_TVM" />
-      <div className="topbar">
-        <div>
-          <div className="kicker">Hybrid Booking Demo</div>
-          <div className="role-ribbon role-central">CENTRAL ONLINE SERVER</div>
-          <div className="title">{title}</div>
-          <div className="subtitle">{subtitle}</div>
+    <div className="min-h-screen bg-slate-950 text-white">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/85 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
+          <div>
+            <div className="text-xs font-semibold tracking-[0.3em] text-cyan-300">{serverLabel}</div>
+            <div className="text-lg font-bold">Hybrid Ticket Demo</div>
+          </div>
+          <nav className="flex items-center gap-4 text-sm text-slate-300">
+            <Link href="/">Home</Link>
+            <Link href="/book">Book</Link>
+            <Link href="/policies">Policies</Link>
+            <Link href="/reports">Reports</Link>
+          </nav>
         </div>
-        <Nav />
-      </div>
-      {children}
-    </main>
+      </header>
+      <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+    </div>
   );
 }
