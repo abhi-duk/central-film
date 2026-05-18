@@ -1,6 +1,6 @@
 
 import Link from 'next/link';
-import { ConnectionBanner } from './ConnectionBanner';
+import ConnectionBanner from './ConnectionBanner';
 
 export default function PageShell({
   title,
