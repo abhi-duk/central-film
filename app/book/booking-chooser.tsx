@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
-type Show = { showId: string; movieTitle: string; theatreName: string; timeIso: string; posterUrl?: string };
+type Show = { showId: string; movieTitle: string; theatreName: string; timeIso: string };
 type SeatMap = Record<string, { status: 'AVAILABLE' | 'HELD' | 'BOOKED'; holdExpiresAt?: string | null }>;
 
 function stableSeatMapSignature(map: SeatMap) {
@@ -137,38 +137,28 @@ export default function BookingChooser({ theatreId, initialShows }: { theatreId:
 
   return (
     <div className="space-y-6">
-      <div className="card p-6 sm:p-7">
-        <div className="kicker">Central online server</div>
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-black tracking-tight sm:text-4xl">Choose a show and book online</h1>
-            <p className="mt-2 max-w-2xl text-slate-300">Pick a show, watch the live seat map, and hold seats safely while payment is being completed.</p>
-          </div>
-          <div className="nav-chip">Real-time theatre aware</div>
-        </div>
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+      <div className="card p-6">
+        <div className="text-sm uppercase tracking-[0.3em] text-cyan-300">CENTRAL ONLINE SERVER</div>
+        <h1 className="mt-2 text-3xl font-bold">Choose a show and book online</h1>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
           {initialShows.map(show => (
-            <button key={show.showId} type="button" onClick={() => setSelectedShow(show)} className={`movie-card ${selectedShow?.showId === show.showId ? 'ring-2 ring-cyan-400 ring-offset-2 ring-offset-slate-950' : ''}`}>
-              <div className="poster-overlay">
-                {show.posterUrl ? <img src={show.posterUrl} alt={show.movieTitle} className="poster" /> : <div className="poster bg-slate-800" />}
-              </div>
-              <div className="relative p-5">
-                <div className="text-xl font-semibold">{show.movieTitle}</div>
-                <div className="mt-1 text-slate-300">{show.theatreName}</div>
-                <div className="mt-2 text-sm text-slate-400">{new Date(show.timeIso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</div>
-              </div>
+            <button key={show.showId} type="button" onClick={() => setSelectedShow(show)}
+              className={`card p-4 text-left transition ${selectedShow?.showId === show.showId ? 'ring-2 ring-cyan-400' : ''}`}>
+              <div className="text-xl font-semibold">{show.movieTitle}</div>
+              <div className="mt-1 text-slate-300">{show.theatreName}</div>
+              <div className="mt-1 text-slate-400">{new Date(show.timeIso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</div>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="card p-6 sm:p-7">
+      <div className="card p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-2xl font-bold">{selectedShow?.movieTitle}</div>
             <div className="text-slate-300">{selectedShow?.theatreName} • {selectedShow ? new Date(selectedShow.timeIso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : ''}</div>
           </div>
-          <div className="nav-chip transition-opacity duration-300">
+          <div className="rounded-full bg-slate-800 px-3 py-2 text-sm transition-opacity duration-300">
             {heartbeatHealthy ? 'Healthy via theatre' : authority === 'ONLINE' ? 'Central fallback mode' : 'Offline / blocked'}
           </div>
         </div>

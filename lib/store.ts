@@ -107,19 +107,7 @@ export async function ensureCentralSchema() {
       heartbeat_status, current_authority, last_heartbeat_at, app_healthy, db_healthy, booking_api_healthy
     ) VALUES (?, 'KSFDC Sree, TVM', 'Thiruvananthapuram', ?, '09:00:00', '23:00:00',
       'LOCAL_PRIORITY', 'ONLINE_PRIORITY', 120, 'OFFLINE', 'BLOCKED', NULL, FALSE, FALSE, FALSE)
-    ON DUPLICATE KEY UPDATE
-      name = VALUES(name),
-      city = VALUES(city),
-      working_hours_start = VALUES(working_hours_start),
-      working_hours_end = VALUES(working_hours_end),
-      outage_mode_working_hours = VALUES(outage_mode_working_hours),
-      outage_mode_off_hours = VALUES(outage_mode_off_hours),
-      lead_time_cutoff_min = VALUES(lead_time_cutoff_min),
-      local_public_url = CASE
-        WHEN theatres.local_public_url IS NULL OR theatres.local_public_url = ''
-        THEN VALUES(local_public_url)
-        ELSE theatres.local_public_url
-      END`,
+    ON DUPLICATE KEY UPDATE name = VALUES(name), city = VALUES(city), working_hours_start = VALUES(working_hours_start), working_hours_end = VALUES(working_hours_end), outage_mode_working_hours = VALUES(outage_mode_working_hours), outage_mode_off_hours = VALUES(outage_mode_off_hours), lead_time_cutoff_min = VALUES(lead_time_cutoff_min)`,
     [theatreId, process.env.LOCAL_PUBLIC_URL || 'http://localhost:3000']
   );
 }
@@ -245,9 +233,7 @@ export async function resolvePendingTransaction(sessionId: string, state: 'CONFI
   const db = getDb();
   await ensureCentralSchema();
   await db.query(
-    `UPDATE pending_transactions
-     SET transaction_state = ?, notes = COALESCE(?, notes), booking_id = COALESCE(?, booking_id), resolved_at = UTC_TIMESTAMP()
-     WHERE session_id = ?`,
+    `UPDATE pending_transactions SET transaction_state = ?, notes = ?, resolved_at = UTC_TIMESTAMP(), booking_id = COALESCE(?, booking_id) WHERE session_id = ?`,
     [state, notes || null, bookingId || null, sessionId]
   );
 }

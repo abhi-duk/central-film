@@ -12,10 +12,10 @@ function speak(text: string) {
 }
 
 function message(s: Status) {
-  if (s.healthy) return 'The line is healthy. Online bookings are being confirmed with the theatre in the background.';
-  if (s.authority === 'ONLINE') return 'The theatre line is down. Central online booking is active for this theatre right now.';
-  if (s.authority === 'LOCAL') return 'The theatre line is down. Online booking is paused while the local counter continues.';
-  return 'The theatre line is down and bookings are paused until the connection returns.';
+  if (s.healthy) return 'Internet connection is healthy. Online booking is active and the theatre server is confirming seats in the background.';
+  if (s.authority === 'ONLINE') return 'Internet connection is lost at the theatre. Central online booking is active now. Local counters should wait until the connection comes back.';
+  if (s.authority === 'LOCAL') return 'Internet connection is lost at the theatre. Online booking is paused now. Only local counter booking is active.';
+  return 'Internet connection is lost. Booking is paused until the connection comes back.';
 }
 
 export default function ConnectionBanner({ theatreId }: { theatreId: string }) {
@@ -54,10 +54,10 @@ export default function ConnectionBanner({ theatreId }: { theatreId: string }) {
   return (
     <div className={cls}>
       <div>
-        <div className="banner-title">Central online server</div>
-        <div className="banner-subtitle">{message(status)}</div>
+        <div className="font-bold">CENTRAL ONLINE SERVER</div>
+        <div className="text-sm opacity-90">{message(status)}</div>
       </div>
-      <div className="banner-pill">
+      <div className="rounded-full bg-black/20 px-3 py-1 text-xs font-semibold">
         {status.healthy ? 'Live via theatre' : status.authority === 'ONLINE' ? 'Central fallback active' : status.authority === 'LOCAL' ? 'Local counter only' : 'Booking paused'}
       </div>
     </div>
