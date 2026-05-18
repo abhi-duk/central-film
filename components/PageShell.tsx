@@ -1,25 +1,19 @@
-'use client';
-import Link from 'next/link';
-import { ReactNode } from 'react';
 
-export default function PageShell({ children, serverLabel = 'CENTRAL ONLINE SERVER' }: { children: ReactNode; serverLabel?: string }) {
+import { ReactNode } from 'react';
+import ConnectionBanner from './ConnectionBanner';
+
+export default function PageShell({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/85 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-          <div>
-            <div className="text-xs font-semibold tracking-[0.3em] text-cyan-300">{serverLabel}</div>
-            <div className="text-lg font-bold">Hybrid Ticket Demo</div>
-          </div>
-          <nav className="flex items-center gap-4 text-sm text-slate-300">
-            <Link href="/">Home</Link>
-            <Link href="/book">Book</Link>
-            <Link href="/policies">Policies</Link>
-            <Link href="/reports">Reports</Link>
-          </nav>
+    <main className="min-h-screen bg-slate-950 text-white">
+      <ConnectionBanner theatreId="KSFDC_SREE_TVM" />
+      <div className="mx-auto max-w-6xl px-6 py-8">
+        <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+          <div className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">Central Online Server</div>
+          <h1 className="mt-2 text-3xl font-bold">{title}</h1>
+          {subtitle ? <p className="mt-2 text-slate-300">{subtitle}</p> : null}
         </div>
-      </header>
-      <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
-    </div>
+        {children}
+      </div>
+    </main>
   );
 }
