@@ -113,11 +113,14 @@ export async function ensureCentralSchema() {
 export async function readMysqlStore() {
   await ensureCentralSchema();
   const db = getDb();
-  const [theatreRows] = await db.query<any[]>('SELECT * FROM theatres ORDER BY theatre_id');
-  const [bookingRows] = await db.query<any[]>('SELECT * FROM bookings ORDER BY created_at DESC');
-  const [pendingRows] = await db.query<any[]>('SELECT * FROM pending_transactions ORDER BY created_at DESC');
+  const [theatreRowsRaw] = await db.query('SELECT * FROM theatres ORDER BY theatre_id');
+  const [bookingRowsRaw] = await db.query('SELECT * FROM bookings ORDER BY created_at DESC');
+  const [pendingRowsRaw] = await db.query('SELECT * FROM pending_transactions ORDER BY created_at DESC');
+  const theatreRows = Array.isArray(theatreRowsRaw) ? (theatreRowsRaw as any[]) : [];
+  const bookingRows = Array.isArray(bookingRowsRaw) ? (bookingRowsRaw as any[]) : [];
+  const pendingRows = Array.isArray(pendingRowsRaw) ? (pendingRowsRaw as any[]) : [];
   return {
-    theatres: theatreRows.map(r => ({
+    theatres: theatreRows.map((r:any) => ({
       theatreId: r.theatre_id,
       name: r.name,
       city: r.city,
@@ -139,7 +142,7 @@ export async function readMysqlStore() {
       updatedAt: toIso(r.updated_at),
       health: { appHealthy: !!r.app_healthy, dbHealthy: !!r.db_healthy, bookingApiHealthy: !!r.booking_api_healthy }
     } as Theatre)),
-    bookings: bookingRows.map(r => ({
+    bookings: bookingRows.map((r:any) => ({
       bookingId: r.booking_id,
       ticketNumber: r.ticket_number,
       theatreId: r.theatre_id,
