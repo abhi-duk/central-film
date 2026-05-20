@@ -8,6 +8,11 @@ export async function POST(req: NextRequest) {
       appHealthy: !!body.appHealthy,
       dbHealthy: !!body.dbHealthy,
       bookingApiHealthy: !!body.bookingApiHealthy,
+      syncPendingCount: Number(body.syncPendingCount || 0),
+      syncSuccessCount: Number(body.syncSuccessCount || 0),
+      syncFailedCount: Number(body.syncFailedCount || 0),
+      syncConflictCount: Number(body.syncConflictCount || 0),
+      recoveryReady: !!body.recoveryReady,
     });
     return NextResponse.json({ success: true });
   } catch (error) {

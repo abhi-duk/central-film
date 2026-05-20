@@ -1,32 +1,11 @@
-import Link from 'next/link';
-import { readMysqlStore } from '../../lib/store';
-
 export const dynamic = 'force-dynamic';
+import PageShell from '../../components/PageShell';
+import { readMysqlStore } from '../../lib/store';
 
 export default async function ReportsPage() {
   const store = await readMysqlStore();
-  return (
-    <main className="shell-main space-y-6">
-      <section className="card hero">
-        <div className="kicker">Reports</div>
-        <h1 className="section-title mt-2">Central booking records</h1>
-        <p className="subtle mt-2">Operational visibility for mirrored local bookings and fallback online transactions.</p>
-      </section>
-      <section className="card p-4 table-wrap">
-        <table className="table">
-          <thead>
-            <tr><th>Booking ID</th><th>Movie</th><th>Seats</th><th>Source</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            {store.bookings.length === 0 ? (
-              <tr><td colSpan={5} className="text-center subtle">No bookings recorded yet</td></tr>
-            ) : store.bookings.map(b => (
-              <tr key={b.bookingId}><td>{b.bookingId}</td><td>{b.movieTitle}</td><td>{b.seats.join(', ')}</td><td>{b.bookingSource}</td><td>{b.bookingStatus}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-      <Link href="/" className="btn btn-secondary">Back to Dashboard</Link>
-    </main>
-  );
+  const total = store.bookings.length;
+  const confirmed = store.bookings.filter((b:any)=>b.bookingStatus==='CONFIRMED').length;
+  const pending = store.pending.filter((p:any)=>p.transaction_state==='PENDING_CONFIRMATION').length;
+  return <PageShell title="Reports & reconciliation" subtitle="Compact booking, sync, and recovery visibility."><div className="grid-cards stats-3"><div className="stat-card"><div className="stat-label">All Bookings</div><div className="stat-value">{total}</div></div><div className="stat-card"><div className="stat-label">Confirmed</div><div className="stat-value">{confirmed}</div></div><div className="stat-card"><div className="stat-label">Pending</div><div className="stat-value">{pending}</div></div></div><div className="table-card mt-6"><table><thead><tr><th>Booking</th><th>Movie</th><th>Seats</th><th>Source</th><th>Status</th><th>Sync</th></tr></thead><tbody>{store.bookings.length===0?<tr><td colSpan={6}>No bookings yet</td></tr>:store.bookings.map((b:any)=><tr key={b.bookingId}><td>{b.ticketNumber}</td><td>{b.movieTitle}</td><td>{b.seats.join(', ')}</td><td>{b.bookingSource}</td><td>{b.bookingStatus}</td><td>{b.reconciliationStatus}</td></tr>)}</tbody></table></div></PageShell>;
 }

@@ -2,26 +2,48 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-type Status = { healthy: boolean; authority: 'LOCAL' | 'ONLINE' | 'BLOCKED' };
+type Status = { healthy: boolean; authority: 'LOCAL' | 'ONLINE' | 'BLOCKED'; recoveryState?: 'LIVE'|'RECOVERING'|'OFFLINE'; syncPendingCount?: number; };
+
+function beep() {
+  if (typeof window === 'undefined' || !window.AudioContext) return;
+  try {
+    const ctx = new window.AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.value = 880; gain.gain.value = 0.05;
+    osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.12);
+  } catch {}
+}
 
 function speak(text: string) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
+  const voices = window.speechSynthesis.getVoices();
+  const preferred = voices.find(v => /female|zira|samantha|google uk english female|heera/i.test(v.name));
+  if (preferred) utterance.voice = preferred;
+  utterance.pitch = 1.05; utterance.rate = 1;
   window.speechSynthesis.speak(utterance);
 }
 
+function shortLabel(s: Status) {
+  if (s.recoveryState === 'RECOVERING') return 'RECOVERING';
+  if (s.healthy) return 'LIVE';
+  return 'NO NET';
+}
+function tone(s: Status) { return s.healthy && s.recoveryState !== 'RECOVERING' ? 'ok' : s.recoveryState === 'RECOVERING' ? 'warn' : 'bad'; }
 function message(s: Status) {
-  if (s.healthy) return 'Internet connection is healthy. Online booking is active and the theatre server is confirming seats in the background.';
-  if (s.authority === 'ONLINE') return 'Internet connection is lost at the theatre. Central online booking is active now. Local counters should wait until the connection comes back.';
-  if (s.authority === 'LOCAL') return 'Internet connection is lost at the theatre. Online booking is paused now. Only local counter booking is active.';
-  return 'Internet connection is lost. Booking is paused until the connection comes back.';
+  if (s.recoveryState === 'RECOVERING') return `Theatre link restored. Sync pending: ${s.syncPendingCount || 0}. Online resumes after reconciliation.`;
+  if (s.healthy) return 'Live confirmation with theatre server is active.';
+  if (s.authority === 'ONLINE') return 'Central online booking is active. Counter waits.';
+  if (s.authority === 'LOCAL') return 'Online paused. Counter booking continues.';
+  return 'Booking paused until the connection returns.';
 }
 
 export default function ConnectionBanner({ theatreId }: { theatreId: string }) {
   const [status, setStatus] = useState<Status | null>(null);
-  const candidateSignature = useRef<string | null>(null);
-  const candidateCount = useRef(0);
+  const candidate = useRef<string | null>(null);
+  const count = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -29,36 +51,28 @@ export default function ConnectionBanner({ theatreId }: { theatreId: string }) {
       try {
         const res = await fetch(`/api/theatres/${theatreId}/authority`, { cache: 'no-store' });
         const text = await res.text();
-        let data: any = null;
-        try { data = text ? JSON.parse(text) : null; } catch {}
+        let data: any = null; try { data = text ? JSON.parse(text) : null; } catch {}
         if (!active || !data?.success) return;
-        const next: Status = { healthy: !!data.heartbeatHealthy, authority: data.authority };
-        const signature = `${next.healthy}-${next.authority}`;
-        if (candidateSignature.current === signature) candidateCount.current += 1;
-        else { candidateSignature.current = signature; candidateCount.current = 1; }
-        if (candidateCount.current < 3) return;
+        const next: Status = { healthy: !!data.heartbeatHealthy, authority: data.authority, recoveryState: data.theatre?.recoveryState, syncPendingCount: data.theatre?.syncPendingCount };
+        const sig = JSON.stringify(next);
+        if (candidate.current === sig) count.current += 1; else { candidate.current = sig; count.current = 1; }
+        if (count.current < 3) return;
         setStatus(prev => {
-          const prevSignature = prev ? `${prev.healthy}-${prev.authority}` : null;
-          if (prevSignature && prevSignature !== signature) speak(message(next));
+          if (prev && JSON.stringify(prev) !== sig) { beep(); speak(message(next)); }
           return next;
         });
       } catch {}
     };
-    run();
-    const timer = setInterval(run, 5000);
-    return () => { active = false; clearInterval(timer); };
+    run(); const t = setInterval(run, 5000); return () => { active = false; clearInterval(t); };
   }, [theatreId]);
 
-  if (!status) return null;
-  const cls = status.healthy ? 'banner banner-ok' : status.authority === 'BLOCKED' ? 'banner banner-bad' : 'banner banner-warn';
+  if (!status) return <div className="status-card status-warn"><div className="status-led blink" /><div><div className="status-title-sm">CHECKING</div><div className="status-copy">Checking theatre link…</div></div></div>;
   return (
-    <div className={cls}>
-      <div>
-        <div className="font-bold">CENTRAL ONLINE SERVER</div>
-        <div className="text-sm opacity-90">{message(status)}</div>
-      </div>
-      <div className="rounded-full bg-black/20 px-3 py-1 text-xs font-semibold">
-        {status.healthy ? 'Live via theatre' : status.authority === 'ONLINE' ? 'Central fallback active' : status.authority === 'LOCAL' ? 'Local counter only' : 'Booking paused'}
+    <div className={`status-card status-${tone(status)}`}>
+      <div className={`status-led ${tone(status)==='bad'?'blink':''}`} />
+      <div className="min-w-0">
+        <div className="status-title-sm">{shortLabel(status)}</div>
+        <div className="status-copy">{message(status)}</div>
       </div>
     </div>
   );

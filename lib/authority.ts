@@ -12,6 +12,12 @@ export type Theatre = {
   leadTimeCutoffMin: number;
   heartbeatStatus: 'ONLINE' | 'OFFLINE' | 'RECOVERING';
   currentAuthority: Authority;
+  recoveryState: 'LIVE' | 'RECOVERING' | 'OFFLINE';
+  syncPendingCount: number;
+  syncSuccessCount: number;
+  syncFailedCount: number;
+  syncConflictCount: number;
+  lastSyncAt: string | null;
   lastHeartbeatAt: string | null;
   updatedAt: string | null;
   health: { appHealthy: boolean; dbHealthy: boolean; bookingApiHealthy: boolean };
@@ -36,7 +42,8 @@ function isWorkingHours(theatre: Theatre, now = new Date()) {
 }
 
 export function determineAuthority(theatre: Theatre, showTimeIso?: string | null): Authority {
-  if (heartbeatHealthy(theatre)) return 'LOCAL';
+  const healthy = heartbeatHealthy(theatre);
+  if (healthy) return 'LOCAL';
   const mode = isWorkingHours(theatre) ? theatre.outageModeWorkingHours : theatre.outageModeOffHours;
   if (mode === 'BLOCK_ALL') return 'BLOCKED';
   if (mode === 'LOCAL_PRIORITY') return 'LOCAL';
@@ -48,6 +55,8 @@ export function determineAuthority(theatre: Theatre, showTimeIso?: string | null
 export function onlineBookingAllowed(theatre: Theatre, showTimeIso?: string | null) {
   const authority = determineAuthority(theatre, showTimeIso);
   const healthy = heartbeatHealthy(theatre);
+  if (healthy && theatre.recoveryState === 'RECOVERING') return false;
+  if (healthy && theatre.syncPendingCount > 0) return false;
   if (authority === 'ONLINE') return true;
   if (authority === 'LOCAL' && healthy) return true;
   return false;
