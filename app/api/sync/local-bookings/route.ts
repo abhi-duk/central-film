@@ -11,11 +11,26 @@ function safeJsonString(value: any) {
   }
 }
 
+function toMysqlDateTime(iso?: string | null) {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toISOString().slice(0, 19).replace('T', ' ');
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const theatreId = body?.theatreId;
-    const bookings = Array.isArray(body?.bookings) ? body.bookings : [];
+
+    // Support both batch and single-booking payloads
+    const bookings = Array.isArray(body?.bookings)
+      ? body.bookings
+      : body?.bookingId
+      ? [body]
+      : [];
 
     if (!theatreId) {
       return NextResponse.json(
@@ -75,11 +90,18 @@ export async function POST(req: NextRequest) {
             booking_source,
             booking_status,
             reconciliation_status,
-            session_id,
-            request_ip,
             payment_mode,
+            hold_id,
+            session_id,
+            idempotency_key,
+            request_ip,
+            source_label,
+            held_at_utc,
+            confirmed_at_utc,
+            synced_at,
             created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CONFIRMED', 'SYNCED_TO_CENTRAL', NULL, ?, ?, UTC_TIMESTAMP())
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CONFIRMED', 'SYNCED_TO_CENTRAL', ?, ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())
           `,
           [
             bookingId,
@@ -88,14 +110,20 @@ export async function POST(req: NextRequest) {
             b.showId || null,
             b.movieTitle || null,
             b.theatreName || null,
-            b.showTimeUtc || null,
+            toMysqlDateTime(b.showTimeUtc),
             b.showLabel || null,
             Number(b.totalTickets || 0),
             safeJsonString(b.seats || []),
             safeJsonString(b.pricing || null),
             b.bookingSource || 'AUDIT_COPY_FROM_LOCAL',
-            b.requestIp || null,
             b.paymentMode || null,
+            b.holdId || null,
+            b.sessionId || null,
+            b.idempotencyKey || null,
+            b.requestIp || null,
+            b.sourceLabel || null,
+            toMysqlDateTime(b.heldAtUtc),
+            toMysqlDateTime(b.confirmedAtUtc),
           ]
         );
 
