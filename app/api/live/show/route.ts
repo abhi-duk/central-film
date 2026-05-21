@@ -15,7 +15,6 @@ const showMeta: Record<string, { time: string; movieTitle: string; theatreName: 
 
 export async function GET(req: NextRequest) {
   const showId = req.nextUrl.searchParams.get('showId');
-  const ifVersion = Number(req.nextUrl.searchParams.get('ifVersion') || '0');
   if (!showId) return NextResponse.json({ success: false, message: 'showId required' }, { status: 400 });
   await markTimedOutTheatres(Number(process.env.HEARTBEAT_TIMEOUT_SECONDS || 30));
   const store = await readMysqlStore();
@@ -36,10 +35,10 @@ export async function GET(req: NextRequest) {
   const localBase = theatre.localPublicUrl || process.env.LOCAL_PUBLIC_URL || '';
   if (!localBase) return NextResponse.json({ success: true, authority: 'BLOCKED', heartbeatHealthy: false, canBookOnline: false, seatMap: null, show: { showId, movieTitle: meta?.movieTitle, time: meta?.time, theatreName: theatre.name }, message: 'Theatre local server URL is not configured.' });
   try {
-    const res = await fetch(`${localBase}/api/public/show/${showId}${ifVersion ? `?ifVersion=${ifVersion}` : ''}`, { cache: 'no-store' });
+    const res = await fetch(`${localBase}/api/public/show/${showId}`, { cache: 'no-store' });
     const text = await res.text(); let data:any=null; try{data=text?JSON.parse(text):null}catch{}
     if (!res.ok || !data?.success) throw new Error('Local show load failed');
-    return NextResponse.json({ success: true, authority, heartbeatHealthy: healthy, canBookOnline: true, changed: data.changed !== false, versionNo: data.versionNo || 1, seatMap: data.seatMap || {}, seatClasses: data.seatClasses || {}, pricing: data.pricing, show: data.show, message: data.changed === false ? 'Live theatre seat status unchanged.' : 'Live theatre seat status loaded.' });
+    return NextResponse.json({ success: true, authority, heartbeatHealthy: healthy, canBookOnline: true, seatMap: data.seatMap || {}, seatClasses: data.seatClasses || {}, pricing: data.pricing, show: data.show, message: 'Live theatre seat status loaded.' });
   } catch (error) {
     console.error('live show fetch error', error);
     return NextResponse.json({ success: true, authority: 'BLOCKED', heartbeatHealthy: false, canBookOnline: false, seatMap: null, show: { showId, movieTitle: meta?.movieTitle, time: meta?.time, theatreName: theatre.name }, message: 'The theatre server could not be reached right now.' });
