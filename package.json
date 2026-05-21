@@ -1,7 +1,7 @@
 {
   "name": "central-film",
-  "version": "1.0.0",
   "private": true,
+  "version": "1.0.0",
   "scripts": {
     "dev": "next dev -p 4000",
     "build": "next build",
@@ -11,17 +11,17 @@
   },
   "dependencies": {
     "next": "16.2.0",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "mysql2": "3.15.3"
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "mysql2": "^3.15.3"
   },
   "devDependencies": {
-    "@types/node": "22.19.1",
-    "@types/react": "19.2.7",
-    "@types/react-dom": "19.2.3",
-    "typescript": "5.9.3"
-  },
-  "engines": {
-    "node": ">=20.9.0"
+    "typescript": "^5.9.3",
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "tailwindcss": "^3.4.17",
+    "postcss": "^8.4.49",
+    "autoprefixer": "^10.4.20"
   }
 }

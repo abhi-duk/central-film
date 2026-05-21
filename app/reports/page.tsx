@@ -1,49 +1,20 @@
-import { getReportStore } from '@/lib/store';
-import type { Booking, PendingTransaction } from '@/lib/types';
+import AppChrome from '../../components/AppChrome';
+import { ensureCentralSchemaAndSeed } from '../../lib/bootstrap';
+import { getDb, rows } from '../../lib/db';
+import { safeJson } from '../../lib/show';
 
-function safeArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? value as T[] : [];
-}
+export const dynamic = 'force-dynamic';
 
 export default async function ReportsPage() {
-  const store = await getReportStore();
-  const bookings = safeArray<Booking>(store.bookings);
-  const pendingRows = safeArray<PendingTransaction>(store.pending);
-
-  const total = bookings.length;
-  const confirmed = bookings.filter((b) => b.bookingStatus === 'CONFIRMED').length;
-  const pending = pendingRows.filter((p) => p.transaction_state === 'PENDING_CONFIRMATION').length;
-  const unsynced = bookings.filter((b) => b.syncStatus === 'NOT_SYNCED').length;
-
-  return (
-    <div>
-      <section className="hero-card">
-        <div>
-          <div className="eyebrow">Reports & Reconciliation</div>
-          <h1 className="page-title">Booking audit dashboard</h1>
-          <p className="page-subtitle">The `.filter()` calls are now protected by array guards, so MySQL QueryResult/OkPacket responses cannot break the build.</p>
-        </div>
-      </section>
-      <section className="grid grid-4">
-        <div className="card"><div className="eyebrow">Total bookings</div><div className="stat-value">{total}</div></div>
-        <div className="card"><div className="eyebrow">Confirmed</div><div className="stat-value">{confirmed}</div></div>
-        <div className="card"><div className="eyebrow">Payment pending</div><div className="stat-value">{pending}</div></div>
-        <div className="card"><div className="eyebrow">Unsynced</div><div className="stat-value">{unsynced}</div></div>
-      </section>
-
-      <section className="card" style={{ marginTop: 18 }}>
-        <h3>Bookings</h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="table">
-            <thead><tr><th>Booking ID</th><th>Movie</th><th>Seats</th><th>Status</th><th>Sync</th><th>Source</th></tr></thead>
-            <tbody>
-              {bookings.map((booking) => (
-                <tr key={booking.bookingId}><td>{booking.bookingId}</td><td>{booking.movieTitle}</td><td>{booking.seats.join(', ')}</td><td>{booking.bookingStatus}</td><td>{booking.syncStatus}</td><td>{booking.bookingSource}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-  );
+  await ensureCentralSchemaAndSeed();
+  const db = getDb();
+  const [bookRows] = await db.query(`SELECT * FROM central_bookings ORDER BY created_at_utc DESC LIMIT 100`);
+  const bookings: any[] = rows<any>(bookRows);
+  const [payRows] = await db.query(`SELECT * FROM payment_transactions ORDER BY created_at_utc DESC LIMIT 100`);
+  const payments: any[] = rows<any>(payRows);
+  const confirmed = bookings.filter(b => b.booking_status === 'CONFIRMED').length;
+  const local = bookings.filter(b => String(b.booking_source).startsWith('LOCAL')).length;
+  const pendingPayments = payments.filter(p => p.transaction_state === 'PENDING_CONFIRMATION').length;
+  const tickets = bookings.reduce((s,b)=>s+Number(b.total_tickets||0),0);
+  return <AppChrome title="Reports & Reconciliation" status="CENTRAL"><div className="grid-cards stats-4"><div className="stat-card"><div className="stat-label">Confirmed bookings</div><div className="stat-value">{confirmed}</div></div><div className="stat-card"><div className="stat-label">Tickets</div><div className="stat-value">{tickets}</div></div><div className="stat-card"><div className="stat-label">Local synced</div><div className="stat-value">{local}</div></div><div className="stat-card"><div className="stat-label">Pending payments</div><div className="stat-value">{pendingPayments}</div></div></div><div className="table-card mt-6"><table><thead><tr><th>Ticket</th><th>Movie</th><th>Seats</th><th>Source</th><th>Status</th><th>Confirmed</th></tr></thead><tbody>{bookings.map(b => { const seats=safeJson<string[]>(b.seats_json,[]); return <tr key={b.booking_id}><td>{b.ticket_number}</td><td>{b.movie_title}</td><td>{seats.join(', ')}</td><td>{b.booking_source}</td><td>{b.reconciliation_status}</td><td>{new Date(`${b.confirmed_at_utc}Z`).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}</td></tr>; })}</tbody></table></div></AppChrome>;
 }
