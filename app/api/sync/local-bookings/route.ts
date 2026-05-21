@@ -1,19 +1,126 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '../../../../lib/db';
-import { ensureCentralSchema, saveCentralBooking } from '../../../../lib/store';
+
+export const dynamic = 'force-dynamic';
+
+function safeJsonString(value: any) {
+  try {
+    return JSON.stringify(value ?? null);
+  } catch {
+    return 'null';
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const booking = await req.json();
-    await ensureCentralSchema();
-    const db = getDb();
-    if (booking.sessionId) {
-      await db.query(`DELETE FROM bookings WHERE session_id=? AND booking_status='HELD'`, [booking.sessionId]).catch(()=>{});
+    const body = await req.json();
+    const theatreId = body?.theatreId;
+    const bookings = Array.isArray(body?.bookings) ? body.bookings : [];
+
+    if (!theatreId) {
+      return NextResponse.json(
+        { success: false, message: 'theatreId is required' },
+        { status: 400 }
+      );
     }
-    await saveCentralBooking({ ...booking, bookingStatus: booking.bookingStatus || 'CONFIRMED', reconciliationStatus: 'RECONCILED', syncedAt: new Date().toISOString() });
-    return NextResponse.json({ success: true, state: 'MIRRORED' });
+
+    if (!bookings.length) {
+      return NextResponse.json({ success: true, results: [] });
+    }
+
+    const db: any = getDb();
+    const results: Array<{ bookingId: string; status: string; message?: string }> = [];
+
+    for (const b of bookings) {
+      const bookingId = b?.bookingId;
+      if (!bookingId) {
+        results.push({
+          bookingId: '',
+          status: 'conflict',
+          message: 'Missing bookingId',
+        });
+        continue;
+      }
+
+      try {
+        const [existingRowsRaw] = await db.query(
+          `SELECT booking_id FROM bookings WHERE booking_id = ? LIMIT 1`,
+          [bookingId]
+        );
+        const existingRows = Array.isArray(existingRowsRaw) ? existingRowsRaw : [];
+        const exists = existingRows[0];
+
+        if (exists) {
+          results.push({
+            bookingId,
+            status: 'already_exists',
+          });
+          continue;
+        }
+
+        await db.query(
+          `
+          INSERT INTO bookings (
+            booking_id,
+            ticket_number,
+            theatre_id,
+            show_id,
+            movie_title,
+            theatre_name,
+            show_time_utc,
+            show_label,
+            total_tickets,
+            seats_json,
+            pricing_json,
+            booking_source,
+            booking_status,
+            reconciliation_status,
+            session_id,
+            request_ip,
+            payment_mode,
+            created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CONFIRMED', 'SYNCED_TO_CENTRAL', NULL, ?, ?, UTC_TIMESTAMP())
+          `,
+          [
+            bookingId,
+            b.ticketNumber || null,
+            b.theatreId || theatreId,
+            b.showId || null,
+            b.movieTitle || null,
+            b.theatreName || null,
+            b.showTimeUtc || null,
+            b.showLabel || null,
+            Number(b.totalTickets || 0),
+            safeJsonString(b.seats || []),
+            safeJsonString(b.pricing || null),
+            b.bookingSource || 'AUDIT_COPY_FROM_LOCAL',
+            b.requestIp || null,
+            b.paymentMode || null,
+          ]
+        );
+
+        results.push({
+          bookingId,
+          status: 'inserted',
+        });
+      } catch (err: any) {
+        results.push({
+          bookingId,
+          status: 'conflict',
+          message: err?.message || 'Insert failed',
+        });
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      results,
+    });
   } catch (error) {
-    console.error('sync local booking failed', error);
-    return NextResponse.json({ success: false, message: 'sync failed' }, { status: 500 });
+    console.error('POST /api/sync/local-bookings failed:', error);
+    return NextResponse.json(
+      { success: false, message: 'Failed to sync local bookings' },
+      { status: 500 }
+    );
   }
 }
