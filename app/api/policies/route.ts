@@ -1,16 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ensureCentralSchema } from '../../../lib/store';
-import { getDb } from '../../../lib/db';
+import { ensureCentralSchema, getPolicy, updatePolicy } from '@/lib/store';
+import { getDb } from '@/lib/db';
+
+export async function GET() {
+  await ensureCentralSchema();
+  await getDb();
+  return NextResponse.json({ success: true, policy: await getPolicy() });
+}
 
 export async function POST(req: NextRequest) {
   try {
     await ensureCentralSchema();
-    const body = await req.json();
-    const db = getDb();
-    await db.query(`UPDATE theatres SET local_public_url=?, working_hours_start=?, working_hours_end=?, outage_mode_working_hours=?, outage_mode_off_hours=?, lead_time_cutoff_min=?, updated_at=CURRENT_TIMESTAMP WHERE theatre_id=?`, [body.localPublicUrl, body.workingHoursStart, body.workingHoursEnd, body.outageModeWorkingHours, body.outageModeOffHours, Number(body.leadTimeCutoffMin || 120), body.theatreId]);
-    return NextResponse.json({ success: true });
-  } catch (e) {
-    console.error('save policy failed', e);
-    return NextResponse.json({ success: false, message: 'Could not save policy' }, { status: 500 });
+    const body = await req.json().catch(() => ({}));
+    const policy = await updatePolicy({
+      holdMinutes: Number(body.holdMinutes ?? body.hold_minutes ?? 8),
+      paymentGraceSeconds: Number(body.paymentGraceSeconds ?? body.payment_grace_seconds ?? 90),
+      heartbeatTimeoutSeconds: Number(body.heartbeatTimeoutSeconds ?? body.heartbeat_timeout_seconds ?? 120),
+      allowCentralFallback: Boolean(body.allowCentralFallback ?? body.allow_central_fallback ?? false),
+    });
+    return NextResponse.json({ success: true, policy });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, message: error?.message || 'Policy update failed' }, { status: 500 });
   }
 }

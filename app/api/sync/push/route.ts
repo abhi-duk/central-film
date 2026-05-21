@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { receiveHeartbeat } from '@/lib/store';
+import { receiveSync } from '@/lib/store';
 
 export async function POST(request: NextRequest) {
   const secret = request.headers.get('x-central-secret');
@@ -7,5 +7,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, message: 'Invalid shared secret' }, { status: 401 });
   }
   const body = await request.json().catch(() => ({}));
-  return NextResponse.json(await receiveHeartbeat(body));
+  const result = await receiveSync(body);
+  return NextResponse.json(result);
 }

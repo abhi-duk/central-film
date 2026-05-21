@@ -1,10 +1,30 @@
 export const dynamic = 'force-dynamic';
+
 import PageShell from '@/components/PageShell';
 import { ensureCentralSchema, readMysqlStore } from '@/lib/store';
 
 export default async function PoliciesPage() {
   await ensureCentralSchema();
   const store = await readMysqlStore();
-  const theatre:any = store.theatres[0];
-  return <PageShell title="Policy configuration" subtitle="Update the tunnel URL, outage modes, and theatre hours used across the platform."><form className="compact-card p-6 max-w-4xl" id="policy-form"><div className="grid gap-4 md:grid-cols-2"><label className="grid gap-2"><span className="mini-note">Public Local URL (Tunnel / Local Server URL)</span><input className="rounded-xl border border-[var(--border)] bg-black/20 px-4 py-3" name="localPublicUrl" defaultValue={theatre.localPublicUrl} /></label><label className="grid gap-2"><span className="mini-note">Lead time cutoff (minutes)</span><input className="rounded-xl border border-[var(--border)] bg-black/20 px-4 py-3" type="number" name="leadTimeCutoffMin" defaultValue={theatre.leadTimeCutoffMin} /></label><label className="grid gap-2"><span className="mini-note">Working hours start</span><input className="rounded-xl border border-[var(--border)] bg-black/20 px-4 py-3" type="time" name="workingHoursStart" defaultValue={theatre.workingHoursStart.slice(0,5)} /></label><label className="grid gap-2"><span className="mini-note">Working hours end</span><input className="rounded-xl border border-[var(--border)] bg-black/20 px-4 py-3" type="time" name="workingHoursEnd" defaultValue={theatre.workingHoursEnd.slice(0,5)} /></label><label className="grid gap-2"><span className="mini-note">Working-hours outage mode</span><select className="rounded-xl border border-[var(--border)] bg-black/20 px-4 py-3" name="outageModeWorkingHours" defaultValue={theatre.outageModeWorkingHours}><option value="LOCAL_PRIORITY">LOCAL_PRIORITY</option><option value="ONLINE_PRIORITY">ONLINE_PRIORITY</option><option value="BLOCK_ALL">BLOCK_ALL</option></select></label><label className="grid gap-2"><span className="mini-note">Off-hours outage mode</span><select className="rounded-xl border border-[var(--border)] bg-black/20 px-4 py-3" name="outageModeOffHours" defaultValue={theatre.outageModeOffHours}><option value="LOCAL_PRIORITY">LOCAL_PRIORITY</option><option value="ONLINE_PRIORITY">ONLINE_PRIORITY</option><option value="BLOCK_ALL">BLOCK_ALL</option></select></label></div><input type="hidden" name="theatreId" value={theatre.theatreId} /><div className="mt-5 flex gap-3"><button type="button" id="save-policy-btn" className="btn btn-primary">Save policy</button></div><script dangerouslySetInnerHTML={{__html:`document.getElementById('save-policy-btn')?.addEventListener('click',async()=>{const form=document.getElementById('policy-form');const fd=new FormData(form);const payload=Object.fromEntries(fd.entries());const res=await fetch('/api/policies',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await res.json().catch(()=>null);alert(data?.success?'Policy saved successfully':'Could not save policy'); if(data?.success) location.reload();})`}} /></form></PageShell>;
+  const policy = store.policy;
+  return (
+    <PageShell title="Policies & timing" subtitle="Central controls for hold duration, gateway grace time and theatre heartbeat timeout.">
+      <section className="grid grid-4">
+        <div className="card"><div className="eyebrow">Seat Hold</div><div className="stat-value">{policy.holdMinutes}m</div><p>Reserved before payment expiry.</p></div>
+        <div className="card"><div className="eyebrow">Payment Grace</div><div className="stat-value">{policy.paymentGraceSeconds}s</div><p>Gateway callback safety window.</p></div>
+        <div className="card"><div className="eyebrow">Heartbeat Timeout</div><div className="stat-value">{policy.heartbeatTimeoutSeconds}s</div><p>Marks theatre node unhealthy.</p></div>
+        <div className="card"><div className="eyebrow">Fallback</div><div className="stat-value">{policy.allowCentralFallback ? 'ON' : 'OFF'}</div><p>Allow central booking if local is unavailable.</p></div>
+      </section>
+      <section className="card" style={{ marginTop: 18 }}>
+        <h3>API update sample</h3>
+        <pre style={{ whiteSpace: 'pre-wrap', color: 'var(--muted)' }}>{`POST /api/policies
+{
+  "holdMinutes": 8,
+  "paymentGraceSeconds": 90,
+  "heartbeatTimeoutSeconds": 120,
+  "allowCentralFallback": false
+}`}</pre>
+      </section>
+    </PageShell>
+  );
 }
