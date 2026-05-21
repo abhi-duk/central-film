@@ -1,0 +1,19 @@
+Central app installation/build
+
+1. Extract this zip so the folder is D:\film\central-film.
+   If you already have an old central-film folder, replace its package.json, package-lock.json, .npmrc, app, lib and components from this zip.
+
+2. Run these commands inside D:\film\central-film:
+
+   npm config set registry https://registry.npmjs.org/
+   npm install --no-audit --no-fund --progress=false
+   npm run build
+
+3. If npm install hangs because of a broken partial install:
+
+   rmdir /s /q node_modules
+   del package-lock.json
+   npm install --no-audit --no-fund --progress=false
+   npm run build
+
+Note: node_modules is not included in the zip. Next.js still needs npm install once on your machine.
