@@ -1,51 +1,39 @@
-'use client';
-
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import AppChrome from '../components/AppChrome';
+import { getReportStore } from '@/lib/store';
 
-function formatWhen(value?: string | null) {
-  if (!value) return '—';
-  return new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-}
+export default async function HomePage() {
+  const store = await getReportStore();
+  const statusClass = store.theatreStatus === 'ONLINE' ? 'status-online' : store.theatreStatus === 'RECOVERING' ? 'status-recovering' : store.theatreStatus === 'DEGRADED' ? 'status-degraded' : 'status-offline';
+  return (
+    <div>
+      <section className="hero-card">
+        <div>
+          <div className="eyebrow">Central Theatre Platform</div>
+          <h1 className="page-title">Hybrid booking control room</h1>
+          <p className="page-subtitle">Public booking, theatre heartbeat, sync recovery and reconciliation in one compact prototype.</p>
+        </div>
+        <div className="kicker"><span className={statusClass}>{store.theatreStatus}</span></div>
+      </section>
 
-export default function HomePage() {
-  const [data, setData] = useState<any>({ stats: { bookings: 0, tickets: 0, localSynced: 0 }, theatre: {}, shows: [] });
-  const [message, setMessage] = useState('Loading central status…');
+      <section className="grid grid-4">
+        <div className="card"><div className="eyebrow">Pending Sync</div><div className="stat-value">{store.syncCounts.pending}</div><p>Rows waiting for central acknowledgement.</p></div>
+        <div className="card"><div className="eyebrow">Synced</div><div className="stat-value">{store.syncCounts.synced}</div><p>Bookings already copied to the central audit DB.</p></div>
+        <div className="card"><div className="eyebrow">Failed</div><div className="stat-value">{store.syncCounts.failed}</div><p>Rows available for retry without blocking live sales.</p></div>
+        <div className="card"><div className="eyebrow">Conflicts</div><div className="stat-value">{store.syncCounts.conflicts}</div><p>Seat or booking mismatches requiring manual review.</p></div>
+      </section>
 
-  useEffect(() => {
-    let active = true;
-    fetch('/api/dashboard', { cache: 'no-store' })
-      .then(r => r.json())
-      .then(out => {
-        if (!active) return;
-        setData(out);
-        setMessage(out?.success ? '' : out?.message || 'Could not load dashboard');
-      })
-      .catch(() => active && setMessage('Could not reach central API. Check database environment variables.'));
-    return () => { active = false; };
-  }, []);
-
-  const stats = data?.stats || {};
-  const theatre = data?.theatre || {};
-  const shows = Array.isArray(data?.shows) ? data.shows : [];
-
-  return <AppChrome title="KSFDC Central Ticketing" status="CENTRAL">
-    <div className="hero-card">
-      <div>
-        <div className="eyebrow">Central control room</div>
-        <h1 className="page-title">Bookings, authority and reconciliation</h1>
-        <p className="page-subtitle">Central app aligned with the working local theatre server. Local heartbeat controls booking authority. Central fallback can take over only when policy allows it.</p>
-      </div>
-      <div className="hero-actions"><Link className="btn btn-primary" href="/book">Book Online</Link><Link className="btn btn-secondary" href="/reports">Reports</Link></div>
+      <section className="grid grid-2" style={{ marginTop: 18 }}>
+        <div className="card">
+          <h3>Public booking</h3>
+          <p>Choose a show, view live seat map with zones and pricing, hold seats and confirm payment.</p>
+          <Link className="btn btn-primary" href="/book" style={{ marginTop: 18 }}>Open booking</Link>
+        </div>
+        <div className="card">
+          <h3>Reports and reconciliation</h3>
+          <p>Check confirmed, pending and synced records. Safe array guards prevent the earlier QueryResult type failure.</p>
+          <Link className="btn btn-secondary" href="/reports" style={{ marginTop: 18 }}>Open reports</Link>
+        </div>
+      </section>
     </div>
-    {message ? <div className="mt-4 rounded-xl border border-soft p-4 text-sm">{message}</div> : null}
-    <div className="grid-cards stats-4 mt-4">
-      <div className="stat-card"><div className="stat-label">Total bookings</div><div className="stat-value">{Number(stats.bookings || 0)}</div></div>
-      <div className="stat-card"><div className="stat-label">Tickets sold</div><div className="stat-value">{Number(stats.tickets || 0)}</div></div>
-      <div className="stat-card"><div className="stat-label">Local synced</div><div className="stat-value">{Number(stats.localSynced || 0)}</div></div>
-      <div className="stat-card"><div className="stat-label">Last heartbeat</div><div className="stat-value text-xl">{formatWhen(theatre.lastHeartbeatUtc)}</div><div className="stat-help">{theatre.theatreId || 'Waiting for local theatre'}</div></div>
-    </div>
-    <div className="show-grid mt-6">{shows.map((show: any) => <Link key={show.showId} href={`/book/show/${show.showId}`} className="show-card"><div className="kicker">{show.screenName}</div><div className="mt-3 text-2xl font-black">{show.movieTitle}</div><div className="mt-2 mini-note">{show.theatreName}</div><div className="mt-3 badge">{formatWhen(show.showTimeUtc)}</div></Link>)}</div>
-  </AppChrome>;
+  );
 }

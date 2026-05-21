@@ -1,41 +1,49 @@
-'use client';
+import { getReportStore } from '@/lib/store';
+import type { Booking, PendingTransaction } from '@/lib/types';
 
-import { useEffect, useState } from 'react';
-import AppChrome from '../../components/AppChrome';
-
-function formatWhen(value?: string | null) {
-  if (!value) return '—';
-  return new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+function safeArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value as T[] : [];
 }
 
-export default function ReportsPage() {
-  const [data, setData] = useState<any>({ stats: { confirmed: 0, tickets: 0, local: 0, pendingPayments: 0 }, bookings: [] });
-  const [message, setMessage] = useState('Loading reports…');
+export default async function ReportsPage() {
+  const store = await getReportStore();
+  const bookings = safeArray<Booking>(store.bookings);
+  const pendingRows = safeArray<PendingTransaction>(store.pending);
 
-  useEffect(() => {
-    let active = true;
-    fetch('/api/reports', { cache: 'no-store' })
-      .then(r => r.json())
-      .then(out => {
-        if (!active) return;
-        setData(out);
-        setMessage(out?.success ? '' : out?.message || 'Could not load reports');
-      })
-      .catch(() => active && setMessage('Could not reach central API. Check database environment variables.'));
-    return () => { active = false; };
-  }, []);
+  const total = bookings.length;
+  const confirmed = bookings.filter((b) => b.bookingStatus === 'CONFIRMED').length;
+  const pending = pendingRows.filter((p) => p.transaction_state === 'PENDING_CONFIRMATION').length;
+  const unsynced = bookings.filter((b) => b.syncStatus === 'NOT_SYNCED').length;
 
-  const stats = data?.stats || {};
-  const bookings = Array.isArray(data?.bookings) ? data.bookings : [];
+  return (
+    <div>
+      <section className="hero-card">
+        <div>
+          <div className="eyebrow">Reports & Reconciliation</div>
+          <h1 className="page-title">Booking audit dashboard</h1>
+          <p className="page-subtitle">The `.filter()` calls are now protected by array guards, so MySQL QueryResult/OkPacket responses cannot break the build.</p>
+        </div>
+      </section>
+      <section className="grid grid-4">
+        <div className="card"><div className="eyebrow">Total bookings</div><div className="stat-value">{total}</div></div>
+        <div className="card"><div className="eyebrow">Confirmed</div><div className="stat-value">{confirmed}</div></div>
+        <div className="card"><div className="eyebrow">Payment pending</div><div className="stat-value">{pending}</div></div>
+        <div className="card"><div className="eyebrow">Unsynced</div><div className="stat-value">{unsynced}</div></div>
+      </section>
 
-  return <AppChrome title="Reports & Reconciliation" status="CENTRAL">
-    {message ? <div className="mb-4 rounded-xl border border-soft p-4 text-sm">{message}</div> : null}
-    <div className="grid-cards stats-4">
-      <div className="stat-card"><div className="stat-label">Confirmed bookings</div><div className="stat-value">{Number(stats.confirmed || 0)}</div></div>
-      <div className="stat-card"><div className="stat-label">Tickets</div><div className="stat-value">{Number(stats.tickets || 0)}</div></div>
-      <div className="stat-card"><div className="stat-label">Local synced</div><div className="stat-value">{Number(stats.local || 0)}</div></div>
-      <div className="stat-card"><div className="stat-label">Pending payments</div><div className="stat-value">{Number(stats.pendingPayments || 0)}</div></div>
+      <section className="card" style={{ marginTop: 18 }}>
+        <h3>Bookings</h3>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="table">
+            <thead><tr><th>Booking ID</th><th>Movie</th><th>Seats</th><th>Status</th><th>Sync</th><th>Source</th></tr></thead>
+            <tbody>
+              {bookings.map((booking) => (
+                <tr key={booking.bookingId}><td>{booking.bookingId}</td><td>{booking.movieTitle}</td><td>{booking.seats.join(', ')}</td><td>{booking.bookingStatus}</td><td>{booking.syncStatus}</td><td>{booking.bookingSource}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
-    <div className="table-card mt-6"><table><thead><tr><th>Ticket</th><th>Movie</th><th>Seats</th><th>Source</th><th>Status</th><th>Confirmed</th></tr></thead><tbody>{bookings.map((b: any) => <tr key={b.bookingId}><td>{b.ticketNumber}</td><td>{b.movieTitle}</td><td>{(b.seats || []).join(', ')}</td><td>{b.bookingSource}</td><td>{b.reconciliationStatus}</td><td>{formatWhen(b.confirmedAtUtc)}</td></tr>)}</tbody></table></div>
-  </AppChrome>;
+  );
 }
