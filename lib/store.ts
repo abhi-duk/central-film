@@ -128,6 +128,67 @@ function parseJsonArray(value: unknown): string[] {
   return [];
 }
 
+export function encodeHoldPayload(hold: HoldRecord) {
+  const selectedSeatClasses = Object.fromEntries(
+    hold.seats.map((seatId) => [seatId, hold.seatClasses?.[seatId]]).filter(([, cls]) => Boolean(cls)),
+  );
+  const compactHold = {
+    holdId: hold.holdId,
+    transactionId: hold.transactionId,
+    theatreId: hold.theatreId,
+    showId: hold.showId,
+    movieTitle: hold.movieTitle,
+    theatreName: hold.theatreName,
+    showTimeIso: hold.showTimeIso,
+    seats: hold.seats,
+    seatClasses: selectedSeatClasses,
+    amount: hold.amount,
+    status: hold.status,
+    expiresAt: hold.expiresAt,
+    createdAt: hold.createdAt,
+  };
+  return Buffer.from(JSON.stringify(compactHold), 'utf8').toString('base64url');
+}
+
+export function decodeHoldPayload(token?: string | null): HoldRecord | null {
+  if (!token) return null;
+  try {
+    const raw = JSON.parse(Buffer.from(token, 'base64url').toString('utf8'));
+    if (!raw || typeof raw !== 'object') return null;
+    const seats = parseJsonArray((raw as any).seats);
+    const holdId = String((raw as any).holdId || (raw as any).hold_id || '');
+    const showId = String((raw as any).showId || (raw as any).show_id || '');
+    if (!holdId || !showId || !seats.length) return null;
+    const show = shows.find((entry) => entry.showId === showId) || shows[0];
+    return {
+      holdId,
+      transactionId: String((raw as any).transactionId || (raw as any).transaction_id || `TXN-${Date.now()}`),
+      theatreId: String((raw as any).theatreId || (raw as any).theatre_id || show.theatreId),
+      showId,
+      movieTitle: String((raw as any).movieTitle || (raw as any).movie_title || show.movieTitle),
+      theatreName: String((raw as any).theatreName || (raw as any).theatre_name || show.theatreName),
+      showTimeIso: String((raw as any).showTimeIso || (raw as any).show_time_iso || show.timeIso),
+      seats,
+      seatClasses: typeof (raw as any).seatClasses === 'object' && (raw as any).seatClasses ? (raw as any).seatClasses : {},
+      amount: Number((raw as any).amount || 0),
+      status: ((raw as any).status || 'HELD') as HoldRecord['status'],
+      expiresAt: String((raw as any).expiresAt || (raw as any).expires_at || new Date(Date.now() + policy.holdMinutes * 60 * 1000).toISOString()),
+      createdAt: String((raw as any).createdAt || (raw as any).created_at || new Date().toISOString()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function holdFromSnapshot(value: unknown): HoldRecord | null {
+  if (!value || typeof value !== 'object') return null;
+  try {
+    return decodeHoldPayload(encodeHoldPayload(value as HoldRecord));
+  } catch {
+    return null;
+  }
+}
+
 function asBool(value: unknown) {
   return value === true || value === 1 || value === '1' || value === 'true';
 }
@@ -403,7 +464,7 @@ export async function holdSeats(input: { theatreId: string; showId: string; movi
     }
   }
 
-  return { success: true, holdId, showId: input.showId, transactionId, amount, expiresAt: expires };
+  return { success: true, holdId, showId: input.showId, transactionId, amount, expiresAt: expires, holdToken: encodeHoldPayload(hold) };
 }
 
 export async function getHoldDetails(holdId: string, showId?: string) {
@@ -442,10 +503,11 @@ export async function getHoldDetails(holdId: string, showId?: string) {
   }
 }
 
-export async function confirmHold(input: string | { holdId?: string; showId?: string }) {
+export async function confirmHold(input: string | { holdId?: string; showId?: string; holdToken?: string; hold?: HoldRecord | null }) {
   const holdId = typeof input === 'string' ? input : input.holdId || '';
   const requestedShowId = typeof input === 'string' ? undefined : input.showId;
-  const hold = await getHoldDetails(holdId, requestedShowId);
+  const fallbackHold = typeof input === 'string' ? null : (decodeHoldPayload(input.holdToken) || holdFromSnapshot(input.hold));
+  const hold = (await getHoldDetails(holdId, requestedShowId)) || (fallbackHold && fallbackHold.holdId === holdId ? fallbackHold : null);
   if (!hold) return { success: false, message: 'Valid holdId is required' };
   const showId = requestedShowId || hold.showId;
   if (!showId) return { success: false, message: 'holdId and showId are required' };

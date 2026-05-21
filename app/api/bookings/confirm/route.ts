@@ -6,6 +6,6 @@ export async function POST(request: NextRequest) {
   if (!body.holdId) {
     return NextResponse.json({ success: false, message: 'holdId is required' }, { status: 400 });
   }
-  const result = await confirmHold({ holdId: body.holdId, showId: body.showId });
+  const result = await confirmHold({ holdId: body.holdId, showId: body.showId, holdToken: body.holdToken, hold: body.hold });
   return NextResponse.json(result, { status: result.success ? 200 : 400 });
 }

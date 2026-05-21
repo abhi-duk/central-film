@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import type { HoldRecord } from '@/lib/types';
 
-export default function PaymentSuccessClient({ hold }: { hold: HoldRecord | null }) {
+export default function PaymentSuccessClient({ hold, holdToken }: { hold: HoldRecord | null; holdToken?: string }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
@@ -20,7 +20,7 @@ export default function PaymentSuccessClient({ hold }: { hold: HoldRecord | null
       const res = await fetch('/api/bookings/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ holdId: hold.holdId, showId: hold.showId }),
+        body: JSON.stringify({ holdId: hold.holdId, showId: hold.showId, holdToken, hold }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
@@ -54,7 +54,7 @@ export default function PaymentSuccessClient({ hold }: { hold: HoldRecord | null
         <div>
           <div className="eyebrow">Payment Simulation</div>
           <h1 className="page-title">Confirm payment success</h1>
-          <p className="page-subtitle">The gateway handoff now carries both holdId and showId, and the API can also recover showId from the saved hold.</p>
+          <p className="page-subtitle">The gateway handoff now carries a durable hold payload, so it works even when Vercel moves the next request to another serverless instance.</p>
         </div>
         <div className="kicker">{hold.status}</div>
       </section>

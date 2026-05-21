@@ -126,7 +126,10 @@ export default function BookingChooser({ theatreId, initialShows }: { theatreId:
       const text = await res.text();
       let data: any = null;
       try { data = text ? JSON.parse(text) : null; } catch { data = null; }
-      if (data?.success) window.location.href = `/book/pay?holdId=${encodeURIComponent(data.holdId)}&showId=${encodeURIComponent(data.showId || selectedShow.showId)}`;
+      if (data?.success) {
+        const holdToken = data.holdToken ? `&holdToken=${encodeURIComponent(data.holdToken)}` : '';
+        window.location.href = `/book/pay?holdId=${encodeURIComponent(data.holdId)}&showId=${encodeURIComponent(data.showId || selectedShow.showId)}${holdToken}`;
+      }
       else setActionError(data?.message || 'Could not hold seats');
     } catch {
       setActionError('Could not hold seats right now. Please try again.');
