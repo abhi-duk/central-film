@@ -25,9 +25,8 @@ export async function POST(req: NextRequest) {
     const res = await fetch(`${localBase}/api/booking/confirm`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ holdId, paymentMode }) });
     const text = await res.text(); let data:any=null; try{data=text?JSON.parse(text):null}catch{}
     if (!res.ok || !data?.success) { if (held?.sessionId) await resolvePendingTransaction(held.sessionId, 'FAILED', data?.message || 'Local confirm failed'); return NextResponse.json({ success:false, message:data?.message || 'Local confirm failed' }, { status:400 }); }
-    await saveCentralBooking({ bookingId: data.bookingId, ticketNumber: data.ticketNumber, theatreId: data.booking.theatreId, showId: data.booking.showId, movieTitle: data.booking.movieTitle, theatreName: data.booking.theatreName, showTimeUtc: data.booking.showTimeUtc, showLabel: data.booking.showLabel, totalTickets: data.booking.totalTickets, seats: data.booking.seats, pricing: data.booking.pricing, bookingSource: data.booking.bookingSource || 'ONLINE_VIA_LOCAL', bookingStatus: 'CONFIRMED', reconciliationStatus: 'RECONCILED', paymentMode: data.booking.paymentMode || paymentMode, holdId, sessionId: data.booking.sessionId, idempotencyKey: data.booking.idempotencyKey, requestIp: data.booking.requestIp, printIp: data.booking.requestIp, sourceLabel: data.booking.sourceLabel, heldAtUtc: null, confirmedAtUtc: new Date().toISOString() });
-    if (data.booking.sessionId) await resolvePendingTransaction(data.booking.sessionId, 'CONFIRMED', 'Local confirmation mirrored to central', data.bookingId);
-    return NextResponse.json({ success: true, bookingId: data.bookingId });
+    if (data.booking?.sessionId) await resolvePendingTransaction(data.booking.sessionId, 'CONFIRMED', 'Local confirmation accepted, central mirror pending', data.bookingId);
+    return NextResponse.json({ success: true, bookingId: data.bookingId, syncPending: true });
   } catch (error) {
     console.error('central confirm failed', error);
     return NextResponse.json({ success: false, message: 'Could not confirm booking' }, { status: 500 });

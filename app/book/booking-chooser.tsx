@@ -33,6 +33,7 @@ export default function BookingChooser({ theatreId, initialShows }: { theatreId:
   const [showOfflineState, setShowOfflineState] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const versionRef = useRef(0);
   const [actionError, setActionError] = useState('');
   const [holding, setHolding] = useState(false);
   const firstLoadRef = useRef(true); const seatSigRef = useRef('');
@@ -43,12 +44,13 @@ export default function BookingChooser({ theatreId, initialShows }: { theatreId:
       if(!selectedShow) return;
       try{
         if(firstLoadRef.current) setLoading(true); else setRefreshing(true);
-        const res = await fetch(`/api/live/show?showId=${selectedShow.showId}`,{cache:'no-store'}); const text = await res.text(); let data:any=null; try{data=text?JSON.parse(text):null}catch{}
+        const res = await fetch(`/api/live/show?showId=${selectedShow.showId}${versionRef.current ? `&ifVersion=${versionRef.current}` : ''}`,{cache:'no-store'}); const text = await res.text(); let data:any=null; try{data=text?JSON.parse(text):null}catch{}
         if(!alive) return;
         if(!res.ok || !data || !data.success){ setMessage('The theatre server could not be checked right now.'); setCanBookOnline(false); setShowOfflineState(true); setLoading(false); setRefreshing(false); firstLoadRef.current=false; return; }
-        const nextSeatMap:SeatMap = data.seatMap ?? {}; const nextSig = stableSeatMapSignature(nextSeatMap);
+        if (data.versionNo) versionRef.current = data.versionNo;
+        if (data.changed !== false) { const nextSeatMap:SeatMap = data.seatMap ?? {}; const nextSig = stableSeatMapSignature(nextSeatMap);
         if(seatSigRef.current !== nextSig){ seatSigRef.current = nextSig; setSeatMap(nextSeatMap); setSelected(prev=>prev.filter(seat=>nextSeatMap[seat]?.status==='AVAILABLE')); }
-        setSeatClasses(data.seatClasses || {}); setPricing(data.pricing || null);
+        setSeatClasses(data.seatClasses || {}); setPricing(data.pricing || null); }
         if(data.show) setSelectedShow((prev)=> prev ? ({...prev, ...data.show, timeIso:data.show.time}) : prev);
         setAuthority(data.authority); setHeartbeatHealthy(!!data.heartbeatHealthy); setCanBookOnline(!!data.canBookOnline); setMessage(data.message || ''); setShowOfflineState(!data.canBookOnline); setLoading(false); setRefreshing(false); firstLoadRef.current=false;
       }catch{ if(!alive) return; setMessage('The theatre connection could not be checked right now.'); setCanBookOnline(false); setShowOfflineState(true); setLoading(false); setRefreshing(false); firstLoadRef.current=false; }

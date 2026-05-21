@@ -9,7 +9,7 @@ function speak(text:string){ if(typeof window==='undefined' || !('speechSynthesi
 export default function PayPage() {
   const params = useMemo(() => new URLSearchParams(typeof window !== 'undefined' ? window.location.search : ''), []);
   const holdId = params.get('holdId') || '';
-  const [seconds, setSeconds] = useState(20);
+  const [seconds, setSeconds] = useState(60);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState('');
   const [paymentMode, setPaymentMode] = useState<'DIGITAL'|'CASH'>('DIGITAL');

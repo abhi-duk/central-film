@@ -5,7 +5,7 @@ export default async function TicketPage({ params }: { params: Promise<{ booking
   const { bookingId } = await params;
   const store = await readMysqlStore();
   const booking:any = store.bookings.find((b:any) => b.bookingId === bookingId);
-  if (!booking) return <main className="p-8">Booking not found</main>;
+  if (!booking) return <main className="ticket-shell"><div className="ticket-receipt"><div className="eyebrow">Ticket syncing</div><h1 className="page-title">Booking confirmed locally</h1><p className="page-subtitle">Central mirror is catching up. This page will refresh automatically.</p><div className="mini-note mt-4">If the ticket does not appear within a few seconds, reload once.</div></div><script dangerouslySetInnerHTML={{__html:`setTimeout(()=>window.location.reload(),2000)`}} /></main>;
   const displayTime = new Date(booking.showTimeUtc).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
   const admit = booking.totalTickets;
   const qr = encodeURIComponent(`${booking.ticketNumber}|${booking.movieTitle}|${booking.seats.join(',')}`);
