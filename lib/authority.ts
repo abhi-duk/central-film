@@ -1,4 +1,5 @@
 import type { Authority, TheatreStatus } from './types';
+export type { Theatre } from './types';
 
 export function heartbeatHealthy(lastHeartbeatAt?: string | null, timeoutSeconds = 120) {
   if (!lastHeartbeatAt) return false;

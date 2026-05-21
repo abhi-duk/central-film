@@ -86,3 +86,14 @@ export type BookingPolicy = {
   allowCentralFallback: boolean;
   updatedAt: string;
 };
+
+export type Theatre = {
+  id: string;
+  name: string;
+  status: TheatreStatus;
+  lastHeartbeatAt?: string | null;
+  allowCentralFallback?: boolean;
+  pendingSync?: number;
+  failedSync?: number;
+  conflicts?: number;
+};
