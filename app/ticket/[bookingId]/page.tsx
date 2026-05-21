@@ -1,19 +1,38 @@
+'use client';
+
 import Link from 'next/link';
-import { ensureCentralSchemaAndSeed } from '../../../lib/bootstrap';
-import { getDb, rows } from '../../../lib/db';
-import { safeJson } from '../../../lib/show';
+import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
-export const dynamic = 'force-dynamic';
+function money(v: number) { return `₹${Number(v || 0).toFixed(2)}`; }
+function formatWhen(value?: string | null) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+}
 
-export default async function TicketPage({ params }: { params: Promise<{ bookingId: string }> }) {
-  const { bookingId } = await params;
-  await ensureCentralSchemaAndSeed();
-  const db = getDb();
-  const [bookingRows] = await db.query(`SELECT * FROM central_bookings WHERE booking_id=? LIMIT 1`, [bookingId]);
-  const b: any = rows<any>(bookingRows)[0];
-  if (!b) return <main className="p-6">Booking not found</main>;
-  const seats = safeJson<string[]>(b.seats_json, []);
-  const pricing = safeJson<any>(b.pricing_json, null);
-  const qr = encodeURIComponent(`${b.ticket_number}|${b.movie_title}|${seats.join(',')}`);
-  return <main className="ticket-shell"><div className="hero-card"><div><div className="eyebrow">Central ticket issued</div><h1 className="page-title">Print or issue next ticket</h1></div><div className="ticket-actions"><Link href={`/book/show/${b.show_id}`} className="btn btn-secondary">Book another ticket</Link><button className="btn btn-primary" id="print-ticket-btn">Print ticket</button></div></div><div className="ticket-print"><div className="ticket-receipt"><div style={{textAlign:'center',fontWeight:'bold'}}>KSFDC CENTRAL TICKET</div><div className="ticket-admit">ADMIT : {seats.length}</div><div className="ticket-big">{b.movie_title}</div><div>{b.theatre_name}</div><hr/><div><strong>Show:</strong> {new Date(`${b.show_time_utc}Z`).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})}</div><div><strong>Seats:</strong> {seats.join(', ')}</div><div><strong>Ticket No:</strong> {b.ticket_number}</div><div><strong>Source:</strong> {b.booking_source}</div><div><strong>Payment:</strong> {b.payment_mode || '—'}</div><div><strong>Total:</strong> ₹{Number(pricing?.total || 0).toFixed(2)}</div><div className="qr-wrap"><img alt="QR" src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${qr}`} width="140" height="140"/></div></div></div><script dangerouslySetInnerHTML={{__html:`document.getElementById('print-ticket-btn')?.addEventListener('click',()=>window.print())`}} /></main>;
+export default function TicketPage() {
+  const params = useParams<{ bookingId: string }>();
+  const bookingId = params.bookingId;
+  const [booking, setBooking] = useState<any>(null);
+  const [message, setMessage] = useState('Loading ticket…');
+
+  useEffect(() => {
+    if (!bookingId) return;
+    let active = true;
+    fetch(`/api/ticket/${encodeURIComponent(bookingId)}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(out => {
+        if (!active) return;
+        setBooking(out?.booking || null);
+        setMessage(out?.success ? '' : out?.message || 'Booking not found');
+      })
+      .catch(() => active && setMessage('Could not reach central API. Check database environment variables.'));
+    return () => { active = false; };
+  }, [bookingId]);
+
+  if (!booking) return <main className="ticket-shell"><div className="hero-card"><div><div className="eyebrow">Central ticket</div><h1 className="page-title">{message}</h1></div><Link href="/book" className="btn btn-secondary">Back to booking</Link></div></main>;
+  const seats: string[] = Array.isArray(booking.seats) ? booking.seats : [];
+  const pricing = booking.pricing || {};
+  const qr = encodeURIComponent(`${booking.ticketNumber}|${booking.movieTitle}|${seats.join(',')}`);
+  return <main className="ticket-shell"><div className="hero-card"><div><div className="eyebrow">Central ticket issued</div><h1 className="page-title">Print or issue next ticket</h1></div><div className="ticket-actions"><Link href={`/book/show/${booking.showId}`} className="btn btn-secondary">Book another ticket</Link><button className="btn btn-primary" onClick={() => window.print()}>Print ticket</button></div></div><div className="ticket-print"><div className="ticket-receipt"><div style={{textAlign:'center',fontWeight:'bold'}}>KSFDC CENTRAL TICKET</div><div className="ticket-admit">ADMIT : {seats.length}</div><div className="ticket-big">{booking.movieTitle}</div><div>{booking.theatreName}</div><hr/><div><strong>Show:</strong> {formatWhen(booking.showTimeUtc)}</div><div><strong>Seats:</strong> {seats.join(', ')}</div><div><strong>Ticket No:</strong> {booking.ticketNumber}</div><div><strong>Source:</strong> {booking.bookingSource}</div><div><strong>Payment:</strong> {booking.paymentMode || '—'}</div><div><strong>Total:</strong> {money(pricing.total || 0)}</div><div className="qr-wrap"><img alt="QR" src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${qr}`} width="140" height="140"/></div></div></div></main>;
 }

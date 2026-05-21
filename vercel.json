@@ -1,0 +1,4 @@
+{
+  "installCommand": "npm cache clean --force && npm ci --no-audit --no-fund --progress=false",
+  "buildCommand": "npm run build"
+}
